@@ -1,47 +1,29 @@
 
-# coding: utf-8
-
-# In[42]:
-
-
 from pyspark import *
 from pyspark.sql import SparkSession
 from pyspark import SparkContext,SQLContext
 from pyspark.ml.feature import StopWordsRemover
 from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql.functions import udf
+import os;
 import math
 import json
 import re
-from pyspark.sql.types import *
-
-
-
-# In[43]:
-
 
 sc = SparkContext()
 sqlContext = SQLContext(sc)
 
-
-# In[55]:
-
-
-textFile=["X_train_small.txt"]
-path = "/Volumes/OSX-DataDrive/data-distributed/"
+textFile=["X_train_vsmall.txt"]
+testFile=["y_train_vsmall.txt"]
+path = "/Volumes/OSX-DataDrive/data-distributed/dataset/training_set/"
+path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
 stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
-
-
-# In[56]:
-
 
 stopword_rdd = sc.textFile(stopwords)
 stopword_list = stopword_rdd.map(lambda l:l.strip()).collect()
 print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
-
-
-# In[76]:
-
 
 def clean(x):
     x = x.strip()
@@ -74,6 +56,10 @@ def round_score(x):
         return 0
     else:
         return round(x,2)
+    
+def checkClass(text,class_label='CAT'):
+    text = text.strip().split(',');
+    return text;
 
 def clean_stopword(x,stopwords):
     if x in stopwords.value:
@@ -121,12 +107,12 @@ def calculate_tf_idf(x):
 
 def build_ngram(x,length,identifier='::'):
     temp = list();
-    x = " ".join(x.split())
-    x = x.lower().split(' ')
-    print(x)
-    for i in range(0,len(x)-length):
-        result = x[i:i+length]
-        temp.append((identifier.join(result),1))
+    text = x[0]
+    text = " ".join(text.split())
+    text = text.lower().split(' ')
+    for i in range(0,len(text)-length):
+        result = text[i:i+length]
+        temp.append((identifier.join(result),x[1]))
 
     return temp;
 
@@ -134,31 +120,44 @@ def reverse_ngram(x,identifier='::'):
     temp = x[0].split(identifier)
     return (temp,x[1])
        
-       
+def split_row(x):
+    text = x[0]
+    label = x[1].split(',')
+    result  =[(text,i) for i in label ]
+    return result;
+
     
 def preprocess(fileName,colname):
-    rdd = sc.textFile(fileName);
-    rdd = rdd.flatMap(lambda l: build_ngram(l.strip(),3)).reduceByKey(lambda a,b:a+b).map(lambda l: reverse_ngram(l)).sortByKey()
-    df = sqlContext.createDataFrame(rdd,schema=['key',colname]).distinct()
+    rdd = sc.textFile(fileName).zipWithIndex();
+    #rdd = rdd.flatMap(lambda l: build_ngram(l.strip(),3)).reduceByKey(lambda a,b:a+b).map(lambda l: reverse_ngram(l)).sortByKey()
+    df = sqlContext.createDataFrame(rdd,schema=[colname,'key']).distinct()
     return df;
-
-
-# In[78]:
-
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
 word_count = list();
 
-result = preprocess(path+textFile[0],"col_1").take(40)
-
-print(result)
-
-
-
-
-
-
+df_1 = preprocess(path_test+testFile[0],"label")
+df_2 = preprocess(path+textFile[0],"text")
+text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l));
+text_table.take(40)
+text_table = text_table.flatMap(lambda l:build_ngram(l,3)).map(lambda l:reverse_ngram(l));
+df = sqlContext.createDataFrame(text_table,schema=['text','label'])
+df.registerTempTable("dataset") #establish main table
 
 
+                    
 
 
+
+
+
+
+
+
+
+
+
+sqlContext.sql("Select * from dataset where label='ECAT'").registerTempTable("ECAT")
+sqlContext.sql("Select * from dataset where label='MCAT'").registerTempTable("MCAT")
+sqlContext.sql("Select * from dataset where label='GCAT'").registerTempTable("GCAT")
+sqlContext.sql("Select * from dataset where label='GCAT'").registerTempTable("CCAT")
