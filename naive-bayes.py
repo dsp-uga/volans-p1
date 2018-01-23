@@ -43,7 +43,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[79]:
+# In[132]:
 
 
 def clean(x):
@@ -145,6 +145,16 @@ def build_ngram(x,length,identifier='::'):
 
     return temp;
 
+def build_query(text,name):
+    data = text.strip().split()
+    query = "Select * from " + name +  " where text='"+data[0]+"'"
+    for i in range(1,len(data)):
+        query = query + " or text='"+data[i]+"'"
+    print(query)
+    return query
+
+
+        
 def reverse_ngram(x,identifier='::'):
     temp = x[0][0].split(identifier)
     return (','.join(temp),x[0][1],x[1])
@@ -168,7 +178,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[102]:
+# In[152]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -177,7 +187,7 @@ word_count = list();
 df_1 = preprocess(path_test+testFile[0],"label")
 df_2 = preprocess(path+textFile[0],"text")
 text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
-text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(l[0][0],l[0][1],l[1]))
+text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
 print(text_table.take(10))
 #text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
 #text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
@@ -198,14 +208,14 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[103]:
+# In[153]:
 
 
 ccat_count = ccat.count();
 mcat_count = mcat.count();
 ecat_count = ecat.count();
 gcat_count = gcat.count();
-
+total = ccat_count + mcat_count + ecat_count + gcat_count
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
 mcat = sqlContext.sql("Select * from dataset where label='mcat'")
@@ -217,23 +227,43 @@ prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
 prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
 prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
 prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
+prob_ccat = prob_ccat.drop('label')
+prob_ccat.registerTempTable('CCAT')
 prob_ccat.cache()
 
 prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
 prob_mcat = calculate_prob(prob_mcat,"mcat",mcat_count)
 prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
 prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
+prob_mcat = prob_mcat.drop('label')
+prob_mcat.registerTempTable('MCAT')
 prob_mcat.cache()
 
 prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
 prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
 prob_gcat = calculate_prob(prob_gcat,"gcat",gcat_count)
 prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
+prob_gcat = prob_gcat.drop('label')
+prob_gcat.registerTempTable('GCAT')
 prob_gcat.cache()
 
 prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
 prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
 prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
 prob_ecat = calculate_prob(prob_ecat,"ecat",ecat_count)
+prob_ecat = prob_ecat.drop('label')
+prob_ecat.registerTempTable('ECAT')
 prob_ecat.cache()
+prob_ecat.show()
+
+
+# In[154]:
+
+
+query = build_query('prajay is good','ecat')
+
+result = sqlContext.sql(query).select('text','ecat')
+
+
+print(result.show())
 
