@@ -43,7 +43,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[ ]:
+# In[79]:
 
 
 def clean(x):
@@ -155,7 +155,12 @@ def split_row(x):
     result  =[(text,i) for i in label ]
     return result;
 
-    
+def split_word(x):
+    label = x[1]
+    text = x[0]
+    word_list = text.split()
+    result = [(i.strip(),label,1) for i in word_list]
+    return result;
 def preprocess(fileName,colname):
     rdd = sc.textFile(fileName).map(lambda l:l.lower()).zipWithIndex();
     #rdd = rdd.flatMap(lambda l: build_ngram(l.strip(),3)).reduceByKey(lambda a,b:a+b).map(lambda l: reverse_ngram(l)).sortByKey()
@@ -163,7 +168,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[ ]:
+# In[102]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -171,9 +176,12 @@ word_count = list();
 
 df_1 = preprocess(path_test+testFile[0],"label")
 df_2 = preprocess(path+textFile[0],"text")
-text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l));
-text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
-
+text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
+text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(l[0][0],l[0][1],l[1]))
+print(text_table.take(10))
+#text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
+#text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
+#print(text_table.take(10))
 df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
 df.registerTempTable("dataset") #establish main table
 
@@ -190,7 +198,13 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[ ]:
+# In[103]:
+
+
+ccat_count = ccat.count();
+mcat_count = mcat.count();
+ecat_count = ecat.count();
+gcat_count = gcat.count();
 
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
@@ -198,28 +212,28 @@ mcat = sqlContext.sql("Select * from dataset where label='mcat'")
 gcat = sqlContext.sql("Select * from dataset where label='gcat'")
 ccat = sqlContext.sql("Select * from dataset where label='ccat'")
 
-prob_ccat = calculate_prob(ccat,"ccat",ccat.count())
-prob_ccat = calculate_prob(prob_ccat,"mcat",mcat.count())
-prob_ccat = calculate_prob(prob_ccat,"gcat",gcat.count())
-prob_ccat = calculate_prob(prob_ccat,"ecat",ecat.count())
 
-prob_mcat = calculate_prob(mcat,"ccat",ccat.count())
-prob_mcat = calculate_prob(prob_mcat,"mcat",mcat.count())
-prob_mcat = calculate_prob(prob_mcat,"gcat",gcat.count())
-prob_mcat = calculate_prob(prob_mcat,"ecat",ecat.count())
+prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
+prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
+prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
+prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
+prob_ccat.cache()
 
-prob_gcat = calculate_prob(gcat,"ccat",ccat.count())
-prob_gcat = calculate_prob(prob_gcat,"mcat",mcat.count())
-prob_gcat = calculate_prob(prob_gcat,"gcat",gcat.count())
-prob_gcat = calculate_prob(prob_gcat,"ecat",ecat.count())
+prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
+prob_mcat = calculate_prob(prob_mcat,"mcat",mcat_count)
+prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
+prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
+prob_mcat.cache()
 
-prob_ecat = calculate_prob(ecat,"ccat",ccat.count())
-prob_ecat = calculate_prob(prob_ecat,"mcat",mcat.count())
-prob_ecat = calculate_prob(prob_ecat,"gcat",gcat.count())
-prob_ecat = calculate_prob(prob_ecat,"ecat",ecat.count())
+prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
+prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
+prob_gcat = calculate_prob(prob_gcat,"gcat",gcat_count)
+prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
+prob_gcat.cache()
 
-
-
-
-
+prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
+prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
+prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
+prob_ecat = calculate_prob(prob_ecat,"ecat",ecat_count)
+prob_ecat.cache()
 
