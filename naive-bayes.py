@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[70]:
+# In[16]:
 
 
 from pyspark import *
@@ -11,20 +11,23 @@ from pyspark.ml.feature import StopWordsRemover
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from pyspark.sql.functions import udf
+import numpy as np
 import os;
 import math
 import json
 import re
 
 
-# In[71]:
+# In[17]:
 
 
 sc = SparkContext()
 sqlContext = SQLContext(sc)
 
+split_size = 10
 
-# In[ ]:
+
+# In[18]:
 
 
 textFile=["X_train_vsmall.txt"]
@@ -34,7 +37,7 @@ path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
 stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
 
 
-# In[ ]:
+# In[19]:
 
 
 stopword_rdd = sc.textFile(stopwords)
@@ -43,7 +46,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[132]:
+# In[24]:
 
 
 def clean(x):
@@ -133,6 +136,8 @@ def calculate_idf(x):
 def calculate_tf_idf(x):
     return [x[0],x[1]*x[-1],x[2]*x[-1],x[3]*x[-1],x[4]*x[-1],x[5]*x[-1],x[6]*x[-1],x[7]*x[-1],x[8]*x[-1]]
 
+
+
 def build_ngram(x,length,identifier='::'):
     temp = list();
     text = x[0]
@@ -145,14 +150,35 @@ def build_ngram(x,length,identifier='::'):
 
     return temp;
 
-def build_query(text,name):
-    data = text.strip().split()
+def split_query(text,name,split_size=10):
+    text = text.split(' ');
+    result = None
+    chunk_size = len(text)%split_size
+    chunks = np.array_split(text,5)
+    temp = list(chunks)
+    for i in temp:
+        query = build_query(i,name)
+        if result  is None:
+            result = sqlContext.sql(query).select('text',name)
+        else:
+            result.union( sqlContext.sql(query).select('text',name))
+    return result;
+    
+        
+
+def build_query(data,name):
+
     query = "Select * from " + name +  " where text='"+data[0]+"'"
     for i in range(1,len(data)):
-        query = query + " or text='"+data[i]+"'"
+        query = query + " or text='"+data[i]+"'" 
     print(query)
     return query
 
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+        
 
         
 def reverse_ngram(x,identifier='::'):
@@ -178,7 +204,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[152]:
+# In[25]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -208,19 +234,19 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[153]:
+# In[26]:
 
+
+ecat = sqlContext.sql("Select * from dataset where label='ecat'")
+mcat = sqlContext.sql("Select * from dataset where label='mcat'")
+gcat = sqlContext.sql("Select * from dataset where label='gcat'")
+ccat = sqlContext.sql("Select * from dataset where label='ccat'")
 
 ccat_count = ccat.count();
 mcat_count = mcat.count();
 ecat_count = ecat.count();
 gcat_count = gcat.count();
 total = ccat_count + mcat_count + ecat_count + gcat_count
-
-ecat = sqlContext.sql("Select * from dataset where label='ecat'")
-mcat = sqlContext.sql("Select * from dataset where label='mcat'")
-gcat = sqlContext.sql("Select * from dataset where label='gcat'")
-ccat = sqlContext.sql("Select * from dataset where label='ccat'")
 
 
 prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
@@ -257,13 +283,13 @@ prob_ecat.cache()
 prob_ecat.show()
 
 
-# In[154]:
+# In[31]:
 
 
-query = build_query('prajay is good','ecat')
-
-result = sqlContext.sql(query).select('text','ecat')
+query = split_query('While you have been writing strings, you still do not know what they do. In this exercise we create a bunch of variables with complex strings so you can see what they are for. First an explanation of strings.A string is usually a bit of text you want to display to someone, or "export" out of the program you are writing. Python knows you want something to be a string when you put either  (double-quotes) or (single-quotes) around the text. You saw this many times with your use of print when you put the text you want to go inside the string inside  or  after the print to print the string.Strings may contain the format characters you have discovered so far. You simply put the formatted variables in the string, and then a % (percent) character, followed by the variable. The only catch is that if you want multiple formats in your string to print multiple variables, you need to put them inside ( ) (parenthesis) separated by , (commas). I s as if you were telling me to buy you a list of items from the store and you said, "I want milk, eggs, bread, and soup. Only as a programmer we say, (milk, eggs, bread, soup).We will now type in a whole bunch of strings, variables, and formats, and print them. You will also practice using short abbreviated variable names. Programmers love saving time at your expense by using annoyingly short and cryptic variable names, so lets get you started reading and writing them early on.','ecat')
 
 
-print(result.show())
+
+print(query.show())
+
 
