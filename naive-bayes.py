@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[7]:
+# In[2]:
 
 
 from pyspark import *
@@ -17,14 +17,14 @@ import json
 import re
 
 
-# In[8]:
+# In[3]:
 
 
 sc = SparkContext()
 sqlContext = SQLContext(sc)
 
 
-# In[9]:
+# In[4]:
 
 
 textFile=["X_train_vsmall.txt"]
@@ -34,7 +34,7 @@ path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
 stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
 
 
-# In[10]:
+# In[5]:
 
 
 stopword_rdd = sc.textFile(stopwords)
@@ -43,7 +43,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[33]:
+# In[49]:
 
 
 def clean(x):
@@ -60,6 +60,8 @@ def clean(x):
     if len(x) <=1:
         return None;
     return x
+
+
 
 def replace_all(x,dataset):
     for i in dataset:
@@ -101,7 +103,12 @@ def save_dict(entries,filename=""):
     json.dump(dict_entry,open(filename,"w"))
 
 
-
+def calculate_probability(x,count):
+    return float(x/count)
+def calculate_prob(df):
+    count = df.count();
+    udf_prob = udf(lambda l:calculate_probability(l,count),FloatType())
+    df.withColumn("class_probability", udf_prob("count")).show(10)
 
 def max(x):
     if x>=1:
@@ -133,13 +140,14 @@ def build_ngram(x,length,identifier='::'):
     text = text.lower().split(' ')
     for i in range(0,len(text)-length):
         result = text[i:i+length]
-        temp.append((identifier.join(result),x[1]))
+        result.sort()
+        temp.append(((identifier.join(result),x[1]),1))
 
     return temp;
 
 def reverse_ngram(x,identifier='::'):
-    temp = x[0].split(identifier)
-    return (temp,x[1])
+    temp = x[0][0].split(identifier)
+    return (temp,x[0][1],x[1])
        
 def split_row(x):
     text = x[0]
@@ -149,13 +157,13 @@ def split_row(x):
 
     
 def preprocess(fileName,colname):
-    rdd = sc.textFile(fileName).zipWithIndex();
+    rdd = sc.textFile(fileName).map(lambda l:l.lower()).zipWithIndex();
     #rdd = rdd.flatMap(lambda l: build_ngram(l.strip(),3)).reduceByKey(lambda a,b:a+b).map(lambda l: reverse_ngram(l)).sortByKey()
     df = sqlContext.createDataFrame(rdd,schema=[colname,'key']).distinct()
     return df;
 
 
-# In[39]:
+# In[50]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -164,9 +172,9 @@ word_count = list();
 df_1 = preprocess(path_test+testFile[0],"label")
 df_2 = preprocess(path+textFile[0],"text")
 text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l));
-text_table.take(40)
-text_table = text_table.flatMap(lambda l:build_ngram(l,3)).map(lambda l:reverse_ngram(l));
-df = sqlContext.createDataFrame(text_table,schema=['text','label'])
+text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
+
+df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
 df.registerTempTable("dataset") #establish main table
 
 
@@ -182,11 +190,12 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[40]:
+# In[51]:
 
 
-sqlContext.sql("Select * from dataset where label='ECAT'").registerTempTable("ECAT")
-sqlContext.sql("Select * from dataset where label='MCAT'").registerTempTable("MCAT")
-sqlContext.sql("Select * from dataset where label='GCAT'").registerTempTable("GCAT")
-sqlContext.sql("Select * from dataset where label='GCAT'").registerTempTable("CCAT")
+ecat = sqlContext.sql("Select * from dataset where label='ecat'")
+mcat = sqlContext.sql("Select * from dataset where label='mcat'")
+gcat = sqlContext.sql("Select * from dataset where label='gcat'")
+ccat = sqlContext.sql("Select * from dataset where label='ccat'")
+calculate_prob(ccat)
 
