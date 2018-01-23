@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[2]:
+# In[70]:
 
 
 from pyspark import *
@@ -17,14 +17,14 @@ import json
 import re
 
 
-# In[3]:
+# In[71]:
 
 
 sc = SparkContext()
 sqlContext = SQLContext(sc)
 
 
-# In[4]:
+# In[ ]:
 
 
 textFile=["X_train_vsmall.txt"]
@@ -34,7 +34,7 @@ path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
 stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
 
 
-# In[5]:
+# In[ ]:
 
 
 stopword_rdd = sc.textFile(stopwords)
@@ -43,7 +43,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[49]:
+# In[ ]:
 
 
 def clean(x):
@@ -105,10 +105,10 @@ def save_dict(entries,filename=""):
 
 def calculate_probability(x,count):
     return float(x/count)
-def calculate_prob(df):
-    count = df.count();
+def calculate_prob(df,label,count):
     udf_prob = udf(lambda l:calculate_probability(l,count),FloatType())
-    df.withColumn("class_probability", udf_prob("count")).show(10)
+    df = df.withColumn(label, udf_prob("count"))
+    return df;
 
 def max(x):
     if x>=1:
@@ -147,7 +147,7 @@ def build_ngram(x,length,identifier='::'):
 
 def reverse_ngram(x,identifier='::'):
     temp = x[0][0].split(identifier)
-    return (temp,x[0][1],x[1])
+    return (','.join(temp),x[0][1],x[1])
        
 def split_row(x):
     text = x[0]
@@ -163,7 +163,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[50]:
+# In[ ]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -190,12 +190,36 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[51]:
+# In[ ]:
 
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
 mcat = sqlContext.sql("Select * from dataset where label='mcat'")
 gcat = sqlContext.sql("Select * from dataset where label='gcat'")
 ccat = sqlContext.sql("Select * from dataset where label='ccat'")
-calculate_prob(ccat)
+
+prob_ccat = calculate_prob(ccat,"ccat",ccat.count())
+prob_ccat = calculate_prob(prob_ccat,"mcat",mcat.count())
+prob_ccat = calculate_prob(prob_ccat,"gcat",gcat.count())
+prob_ccat = calculate_prob(prob_ccat,"ecat",ecat.count())
+
+prob_mcat = calculate_prob(mcat,"ccat",ccat.count())
+prob_mcat = calculate_prob(prob_mcat,"mcat",mcat.count())
+prob_mcat = calculate_prob(prob_mcat,"gcat",gcat.count())
+prob_mcat = calculate_prob(prob_mcat,"ecat",ecat.count())
+
+prob_gcat = calculate_prob(gcat,"ccat",ccat.count())
+prob_gcat = calculate_prob(prob_gcat,"mcat",mcat.count())
+prob_gcat = calculate_prob(prob_gcat,"gcat",gcat.count())
+prob_gcat = calculate_prob(prob_gcat,"ecat",ecat.count())
+
+prob_ecat = calculate_prob(ecat,"ccat",ccat.count())
+prob_ecat = calculate_prob(prob_ecat,"mcat",mcat.count())
+prob_ecat = calculate_prob(prob_ecat,"gcat",gcat.count())
+prob_ecat = calculate_prob(prob_ecat,"ecat",ecat.count())
+
+
+
+
+
 
