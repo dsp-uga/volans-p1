@@ -48,7 +48,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[119]:
+# In[130]:
 
 
 def clean(x):
@@ -139,11 +139,11 @@ def calculate_tf_idf(x):
     return [x[0],x[1]*x[-1],x[2]*x[-1],x[3]*x[-1],x[4]*x[-1],x[5]*x[-1],x[6]*x[-1],x[7]*x[-1],x[8]*x[-1]]
 
 
-def naive_bayes(text,total_prob):
-    ecat = calculate_class_prob(text,'ecat',final_prob)
-    mcat = calculate_class_prob(text,'mcat',final_prob)
-    ccat = calculate_class_prob(text,'ccat',final_prob)
-    gcat = calculate_class_prob(text,'gcat',final_prob)
+def naive_bayes(text):
+    ecat = calculate_class_prob(text,'ecat')
+    mcat = calculate_class_prob(text,'mcat')
+    ccat = calculate_class_prob(text,'ccat')
+    gcat = calculate_class_prob(text,'gcat')
     if ecat > mcat and ecat > ccat and ecat > gcat:
         return 0
     elif mcat > ecat and mcat > ccat and mcat > gcat:
@@ -153,7 +153,7 @@ def naive_bayes(text,total_prob):
     elif gcat > mcat and gcat > ccat and gcat > ecat:
         return 3
 
-def calculate_class_prob(text,name,total_prob):
+def calculate_class_prob(text,name):
     query = split_query(text,name)
     result = query.collect()
     if name =='ecat':
@@ -165,7 +165,7 @@ def calculate_class_prob(text,name,total_prob):
     elif name =='mcat':
         result = [i.mcat for i in result]
         
-    result = reduce(lambda x, y: x*y, result) * total_prob
+    result = reduce(lambda x, y: x*y, result)
     
     return result
 
@@ -184,7 +184,7 @@ def build_ngram(x,length,identifier='::'):
 def split_query(text,name,split_size=10):
     text = text.replace("'",'');
     text = text.replace('"','');
-    text = text.split(' ');
+    text = list(set(text.split(' ')));
     result = None
    
     slots = int(len(text)/split_size)
@@ -243,7 +243,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[116]:
+# In[131]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -272,7 +272,7 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[117]:
+# In[135]:
 
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
@@ -284,50 +284,49 @@ ccat_count = ccat.count();
 mcat_count = mcat.count();
 ecat_count = ecat.count();
 gcat_count = gcat.count();
-total = ccat_count + mcat_count + ecat_count + gcat_count
-final_prob = (ccat_count/float(total))*(mcat_count/float(total))*(ecat_count/float(total))*(gcat_count/float(total))
+#total = ccat_count + mcat_count + ecat_count + gcat_count
+#final_prob = (ccat_count/float(total))*(mcat_count/float(total))*(ecat_count/float(total))*(gcat_count/float(total))
 
 
 prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
-prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
-prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
-prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
+#prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
+#prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
+#prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
 prob_ccat = prob_ccat.drop('label')
 prob_ccat.registerTempTable('CCAT')
 prob_ccat.cache()
 
-prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
+#prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
 prob_mcat = calculate_prob(prob_mcat,"mcat",mcat_count)
-prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
-prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
-prob_mcat = prob_mcat.drop('label')
+#prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
+#prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
+#prob_mcat = prob_mcat.drop('label')
 prob_mcat.registerTempTable('MCAT')
 prob_mcat.cache()
 
-prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
-prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
+#prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
+#prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
 prob_gcat = calculate_prob(prob_gcat,"gcat",gcat_count)
-prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
+#prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
 prob_gcat = prob_gcat.drop('label')
 prob_gcat.registerTempTable('GCAT')
 prob_gcat.cache()
 
-prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
-prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
-prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
+#prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
+#prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
+#prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
 prob_ecat = calculate_prob(prob_ecat,"ecat",ecat_count)
 prob_ecat = prob_ecat.drop('label')
 prob_ecat.registerTempTable('ECAT')
 prob_ecat.cache()
-prob_ecat.show()
 
 
-# In[120]:
+# In[136]:
 
 
 
-text = 'if you want multiple formats in your string to print multiple variables, you need to pu s that if you want multiple formats in your string to print multiple variables, you need to pu'
-print(naive_bayes(text,final_prob))
+text = "A dedicated &quot;snow desk&quot; has been set up by the New York and New Jersey Port Authority to monitor and react to harsh weather conditions and help prevent disruption to travellers and cargo moving through key airports this winter. The authority operates New York's John F Kennedy, LaGuardia and Newark airports and carefully tracks weather patterns all year round. Each airport supplements National Weather Service reports with facility-specific forecasts from private companies that are updated a few times a day. &quot;We don't sit and wait for the weather to hit us&quot; said the Port authority chief operations officer David Feeley. &quot;We use the latest technology to anticipate what's coming day's in advance, which allows up to plan for deployment of employees and equipment at each facility.&quot; Each airport has a &quot;snow desk&quot; at which key operations and maintenance personnel analyse the weather reports and deploy staff and equipment accordingly. Each has inground sensors transmitting data such as windspeed and direction, dewpoint, humidity, air and ground temperatures. More than 5,100 tons of salt and sand, special de-icing equipment and 250 pieces of dedicated snow-fighting equipment - including massive snow-melters and snow blowers - is on standby to counter almost any winter blast at JFK, LaGuadria and Newark airports this year. Air Cargo Newsroom Tel+44 171 542 7706 Fax+44 171 542 5017"
+print(naive_bayes(text))
 
 
 
