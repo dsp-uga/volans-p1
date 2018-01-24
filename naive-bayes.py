@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[57]:
+# In[99]:
 
 
 from pyspark import *
@@ -20,7 +20,7 @@ import json
 import re
 
 
-# In[58]:
+# In[100]:
 
 
 sc = SparkContext()
@@ -29,7 +29,7 @@ sqlContext = SQLContext(sc)
 split_size = 10
 
 
-# In[59]:
+# In[101]:
 
 
 textFile=["X_train_vsmall.txt"]
@@ -39,7 +39,7 @@ path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
 stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
 
 
-# In[60]:
+# In[102]:
 
 
 stopword_rdd = sc.textFile(stopwords)
@@ -48,7 +48,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[84]:
+# In[111]:
 
 
 def clean(x):
@@ -140,6 +140,21 @@ def calculate_tf_idf(x):
 
 
 
+def naive_bayes(text,name,total_prob):
+    query = split_query(text,name)
+    result = query.collect()
+    if name =='ecat':
+        result = [i.ecat for i in result]
+    elif name=='ccat':
+        result = [i.ccat for i in result]
+    elif name =='gcat':
+        result = [i.gcat for i in result]
+    elif name =='mcat':
+        result = [i.mcat for i in result]
+        
+    result = reduce(lambda x, y: x*y, result) * total_prob
+    return result
+
 def build_ngram(x,length,identifier='::'):
     temp = list();
     text = x[0]
@@ -217,7 +232,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[85]:
+# In[108]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -246,7 +261,7 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[86]:
+# In[109]:
 
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
@@ -259,6 +274,7 @@ mcat_count = mcat.count();
 ecat_count = ecat.count();
 gcat_count = gcat.count();
 total = ccat_count + mcat_count + ecat_count + gcat_count
+final_prob = (ccat_count/float(total))*(mcat_count/float(total))*(ecat_count/float(total))*(gcat_count/float(total))
 
 
 prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
@@ -295,14 +311,16 @@ prob_ecat.cache()
 prob_ecat.show()
 
 
-# In[88]:
+# In[115]:
 
 
 
-query = split_query('if you want multiple formats in your string to print multiple variables, you need to pu s that if you want multiple formats in your string to print multiple variables, you need to pu','ecat')
+text = 'if you want multiple formats in your string to print multiple variables, you need to pu s that if you want multiple formats in your string to print multiple variables, you need to pu'
+print(naive_bayes(text,'ecat',final_prob))
+print(naive_bayes(text,'mcat',final_prob))
+print(naive_bayes(text,'ccat',final_prob))
+print(naive_bayes(text,'gcat',final_prob))
 
 
-
-print(query.take(100))
 
 
