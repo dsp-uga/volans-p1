@@ -1,15 +1,17 @@
 
 # coding: utf-8
 
-# In[16]:
+# In[57]:
 
 
 from pyspark import *
-from pyspark.sql import SparkSession
+from pyspark.sql import *
 from pyspark import SparkContext,SQLContext
 from pyspark.ml.feature import StopWordsRemover
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+from functools import reduce
+
 from pyspark.sql.functions import udf
 import numpy as np
 import os;
@@ -18,7 +20,7 @@ import json
 import re
 
 
-# In[17]:
+# In[58]:
 
 
 sc = SparkContext()
@@ -27,7 +29,7 @@ sqlContext = SQLContext(sc)
 split_size = 10
 
 
-# In[18]:
+# In[59]:
 
 
 textFile=["X_train_vsmall.txt"]
@@ -37,7 +39,7 @@ path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
 stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
 
 
-# In[19]:
+# In[60]:
 
 
 stopword_rdd = sc.textFile(stopwords)
@@ -46,7 +48,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[24]:
+# In[84]:
 
 
 def clean(x):
@@ -151,22 +153,33 @@ def build_ngram(x,length,identifier='::'):
     return temp;
 
 def split_query(text,name,split_size=10):
+    text = text.replace("'",'');
+    text = text.replace('"','');
     text = text.split(' ');
     result = None
-    chunk_size = len(text)%split_size
-    chunks = np.array_split(text,5)
+    print(len(text))
+    print(split_size)
+    slots = int(len(text)/split_size)
+    print(slots)
+    chunks = np.array_split(text,slots)
     temp = list(chunks)
+    print(temp)
+    df_list = list();
     for i in temp:
-        query = build_query(i,name)
-        if result  is None:
-            result = sqlContext.sql(query).select('text',name)
-        else:
-            result.union( sqlContext.sql(query).select('text',name))
+        print(i)
+        query = build_query(np.array(i).tolist(),name)
+        df = sqlContext.sql(query)
+        df_list.append(df.rdd)
+    result = sc.union(df_list)
     return result;
-    
-        
+
+#taken from stackoverflow
+
+def unionAll(*dfs):
+    return reduce(DataFrame.unionAll, dfs)
 
 def build_query(data,name):
+    
 
     query = "Select * from " + name +  " where text='"+data[0]+"'"
     for i in range(1,len(data)):
@@ -200,11 +213,11 @@ def split_word(x):
 def preprocess(fileName,colname):
     rdd = sc.textFile(fileName).map(lambda l:l.lower()).zipWithIndex();
     #rdd = rdd.flatMap(lambda l: build_ngram(l.strip(),3)).reduceByKey(lambda a,b:a+b).map(lambda l: reverse_ngram(l)).sortByKey()
-    df = sqlContext.createDataFrame(rdd,schema=[colname,'key']).distinct()
+    df = sqlContext.createDataFrame(rdd,schema=[colname,'key'])
     return df;
 
 
-# In[25]:
+# In[85]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -214,7 +227,6 @@ df_1 = preprocess(path_test+testFile[0],"label")
 df_2 = preprocess(path+textFile[0],"text")
 text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
 text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
-print(text_table.take(10))
 #text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
 #text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
 #print(text_table.take(10))
@@ -234,7 +246,7 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[26]:
+# In[86]:
 
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
@@ -283,13 +295,14 @@ prob_ecat.cache()
 prob_ecat.show()
 
 
-# In[31]:
-
-
-query = split_query('While you have been writing strings, you still do not know what they do. In this exercise we create a bunch of variables with complex strings so you can see what they are for. First an explanation of strings.A string is usually a bit of text you want to display to someone, or "export" out of the program you are writing. Python knows you want something to be a string when you put either  (double-quotes) or (single-quotes) around the text. You saw this many times with your use of print when you put the text you want to go inside the string inside  or  after the print to print the string.Strings may contain the format characters you have discovered so far. You simply put the formatted variables in the string, and then a % (percent) character, followed by the variable. The only catch is that if you want multiple formats in your string to print multiple variables, you need to put them inside ( ) (parenthesis) separated by , (commas). I s as if you were telling me to buy you a list of items from the store and you said, "I want milk, eggs, bread, and soup. Only as a programmer we say, (milk, eggs, bread, soup).We will now type in a whole bunch of strings, variables, and formats, and print them. You will also practice using short abbreviated variable names. Programmers love saving time at your expense by using annoyingly short and cryptic variable names, so lets get you started reading and writing them early on.','ecat')
+# In[88]:
 
 
 
-print(query.show())
+query = split_query('if you want multiple formats in your string to print multiple variables, you need to pu s that if you want multiple formats in your string to print multiple variables, you need to pu','ecat')
+
+
+
+print(query.take(100))
 
 
