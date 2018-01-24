@@ -48,7 +48,7 @@ print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[111]:
+# In[119]:
 
 
 def clean(x):
@@ -139,8 +139,21 @@ def calculate_tf_idf(x):
     return [x[0],x[1]*x[-1],x[2]*x[-1],x[3]*x[-1],x[4]*x[-1],x[5]*x[-1],x[6]*x[-1],x[7]*x[-1],x[8]*x[-1]]
 
 
+def naive_bayes(text,total_prob):
+    ecat = calculate_class_prob(text,'ecat',final_prob)
+    mcat = calculate_class_prob(text,'mcat',final_prob)
+    ccat = calculate_class_prob(text,'ccat',final_prob)
+    gcat = calculate_class_prob(text,'gcat',final_prob)
+    if ecat > mcat and ecat > ccat and ecat > gcat:
+        return 0
+    elif mcat > ecat and mcat > ccat and mcat > gcat:
+        return 1
+    elif ccat > mcat and ccat > ecat and ccat > gcat:
+        return 2
+    elif gcat > mcat and gcat > ccat and gcat > ecat:
+        return 3
 
-def naive_bayes(text,name,total_prob):
+def calculate_class_prob(text,name,total_prob):
     query = split_query(text,name)
     result = query.collect()
     if name =='ecat':
@@ -153,6 +166,7 @@ def naive_bayes(text,name,total_prob):
         result = [i.mcat for i in result]
         
     result = reduce(lambda x, y: x*y, result) * total_prob
+    
     return result
 
 def build_ngram(x,length,identifier='::'):
@@ -172,16 +186,13 @@ def split_query(text,name,split_size=10):
     text = text.replace('"','');
     text = text.split(' ');
     result = None
-    print(len(text))
-    print(split_size)
+   
     slots = int(len(text)/split_size)
-    print(slots)
+   
     chunks = np.array_split(text,slots)
     temp = list(chunks)
-    print(temp)
     df_list = list();
     for i in temp:
-        print(i)
         query = build_query(np.array(i).tolist(),name)
         df = sqlContext.sql(query)
         df_list.append(df.rdd)
@@ -232,7 +243,7 @@ def preprocess(fileName,colname):
     return df;
 
 
-# In[108]:
+# In[116]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
@@ -261,7 +272,7 @@ df.registerTempTable("dataset") #establish main table
 
 
 
-# In[109]:
+# In[117]:
 
 
 ecat = sqlContext.sql("Select * from dataset where label='ecat'")
@@ -311,15 +322,12 @@ prob_ecat.cache()
 prob_ecat.show()
 
 
-# In[115]:
+# In[120]:
 
 
 
 text = 'if you want multiple formats in your string to print multiple variables, you need to pu s that if you want multiple formats in your string to print multiple variables, you need to pu'
-print(naive_bayes(text,'ecat',final_prob))
-print(naive_bayes(text,'mcat',final_prob))
-print(naive_bayes(text,'ccat',final_prob))
-print(naive_bayes(text,'gcat',final_prob))
+print(naive_bayes(text,final_prob))
 
 
 
