@@ -213,6 +213,7 @@ def build_query(data,name):
     print(query)
     return query
 
+#https://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
@@ -284,8 +285,7 @@ ccat_count = ccat.count();
 mcat_count = mcat.count();
 ecat_count = ecat.count();
 gcat_count = gcat.count();
-#total = ccat_count + mcat_count + ecat_count + gcat_count
-#final_prob = (ccat_count/float(total))*(mcat_count/float(total))*(ecat_count/float(total))*(gcat_count/float(total))
+total = ccat_count + mcat_count + ecat_count + gcat_count
 
 
 prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
@@ -324,7 +324,7 @@ prob_ecat.cache()
 # In[136]:
 
 
-
+sc.textFile()
 text = "A dedicated &quot;snow desk&quot; has been set up by the New York and New Jersey Port Authority to monitor and react to harsh weather conditions and help prevent disruption to travellers and cargo moving through key airports this winter. The authority operates New York's John F Kennedy, LaGuardia and Newark airports and carefully tracks weather patterns all year round. Each airport supplements National Weather Service reports with facility-specific forecasts from private companies that are updated a few times a day. &quot;We don't sit and wait for the weather to hit us&quot; said the Port authority chief operations officer David Feeley. &quot;We use the latest technology to anticipate what's coming day's in advance, which allows up to plan for deployment of employees and equipment at each facility.&quot; Each airport has a &quot;snow desk&quot; at which key operations and maintenance personnel analyse the weather reports and deploy staff and equipment accordingly. Each has inground sensors transmitting data such as windspeed and direction, dewpoint, humidity, air and ground temperatures. More than 5,100 tons of salt and sand, special de-icing equipment and 250 pieces of dedicated snow-fighting equipment - including massive snow-melters and snow blowers - is on standby to counter almost any winter blast at JFK, LaGuadria and Newark airports this year. Air Cargo Newsroom Tel+44 171 542 7706 Fax+44 171 542 5017"
 print(naive_bayes(text))
 
