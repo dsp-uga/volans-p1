@@ -3,6 +3,9 @@
 
 # In[1]:
 
+
+import findspark
+findspark.init()
 import pyspark
 from operator import add, itemgetter
 import json
@@ -72,6 +75,7 @@ CountinAllDocs = CountinAllDocs.sortBy(lambda x: x[1],False)
 
 numWords = sc.broadcast(CountinAllDocs.count())
 numDocs = sc.broadcast(documents.count())
+wordList = sc.broadcast(CountinAllDocs.keys().collect())
 
 
 # # Calculating term frequency in each doc
@@ -290,11 +294,14 @@ labelWordCount =sc.broadcast(labelWC.collectAsMap())
 
 def countWord2(x):
     dictionary={}
-    for word in x[1]:
-        if word not in dictionary:
-            dictionary[word] = 1
+    for word in wordList.value:
+        if word in x[1]:
+            if word not in dictionary:
+                dictionary[word] = 1
+            else:
+                dictionary[word] = dictionary[word]+1
         else:
-            dictionary[word]+=1
+            dictionary[word] = 0
     return (x[0],dictionary)
 
 
@@ -307,20 +314,32 @@ ProbDocListCount = ProbDocList.map(lambda x: countWord2(x))
 # In[37]:
 
 
-def getWordProbability(x):
-    tempDict={}
-    for k,v in x[1].items():
-        tempDict[k]= v/labelWordCount.value[x[0]]
-    return (x[0],tempDict)
+ProbDocListCount.collect()
 
 
 # In[38]:
 
 
-wordProbability = ProbDocListCount.map(lambda x: getWordProbability(x))
+def getWordProbability(x):
+    tempDict={}
+    for k,v in x[1].items():
+        tempDict[k]= (v+1)/(numWords.value + labelWordCount.value[x[0]])
+    return (x[0],tempDict)
 
 
 # In[39]:
+
+
+wordProbability = ProbDocListCount.map(lambda x: getWordProbability(x))
+
+
+# In[40]:
+
+
+wordProbability.collect()
+
+
+# In[41]:
 
 
 def getLogProb(x):
@@ -330,37 +349,56 @@ def getLogProb(x):
     return (x[0],tempDict)
 
 
-# In[40]:
+# In[42]:
 
 
 logProbability = wordProbability.map(lambda x: getLogProb(x))
+logProbability.collect()
 
 
 # ## Calculating Class Probability
 
-# In[41]:
+# In[43]:
 
 
 classList = sc.parallelize(requiredLabels.reduce(add))
 classCount = classList.map(lambda x: (x,1)).reduceByKey(add)
 
 
-# In[42]:
+# In[44]:
 
 
 classProbability = classCount.map(lambda x: (x[0],x[1]/numberOfDocs.value))
 classProb = sc.broadcast(classProbability.collectAsMap())
 
-# #  Prediction
+
+# ## Testing the probabilities
 
 # In[45]:
+
+
+classProbability.collect()[0][1] + classProbability.collect()[1][1] + classProbability.collect()[2][1] + classProbability.collect()[3][1]
+
+
+# In[46]:
+
+
+sums=0
+for k,v in wordProbability.collect()[3][1].items():
+    sums = sums+v
+print(sums)
+
+
+# #  Prediction
+
+# In[47]:
 
 
 testDocuments = sc.textFile("/home/vyom/UGA/DSP/Project1/X_test_vsmall.txt")
 testLabels = sc.textFile("/home/vyom/UGA/DSP/Project1/y_test_vsmall.txt")
 
 
-# In[46]:
+# In[48]:
 
 
 bagOfWordsTest = testDocuments.map(lambda word: word.lower().split())
@@ -368,13 +406,13 @@ bagOfWordsTest = bagOfWordsTest.map(lambda x: stripWord(x))
 bagOfWordsTest = bagOfWordsTest.map(lambda x: stripStopWord(x))
 
 
-# In[47]:
+# In[49]:
 
 
 testData = sc.broadcast(bagOfWordsTest.collect())
 
 
-# In[48]:
+# In[50]:
 
 
 def TestLogProbSum(x):
@@ -390,13 +428,13 @@ def TestLogProbSum(x):
     return (x[0],tempDict)
 
 
-# In[49]:
+# In[51]:
 
 
 logProbSum = logProbability.map(lambda x: TestLogProbSum(x))
 
 
-# In[50]:
+# In[52]:
 
 
 def getPrediction(x):
@@ -406,15 +444,14 @@ def getPrediction(x):
     return(x[0],tempDict)
 
 
-# In[51]:
+# In[53]:
 
 
 prediction = logProbSum.map(lambda x: getPrediction(x))
 
 
-# In[52]:
+# In[54]:
 
 
-for i in prediction.collect():
-    print(i)
+print(prediction.collect())
 
