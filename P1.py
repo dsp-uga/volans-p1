@@ -26,13 +26,13 @@ sc = pyspark.SparkContext('local',appName="DocClassification")
 # In[3]:
 
 
-documents = sc.textFile("/home/vyom/UGA/DSP/Project1/X_train_vsmall.txt")
+documents = sc.textFile("/home/vyom/UGA/DSP/Project1/X_train_small.txt")
 
 
 # In[4]:
 
 
-labels = sc.textFile("/home/vyom/UGA/DSP/Project1/y_train_vsmall.txt")
+labels = sc.textFile("/home/vyom/UGA/DSP/Project1/y_train_small.txt")
 
 
 # In[5]:
@@ -42,12 +42,13 @@ splt = documents.flatMap(lambda word: word.split())
 splt = splt.map(lambda word: word.lower())
 
 #Removing Punctuation
-splt = splt.map(lambda word: word.replace("&quot",""))
+splt = splt.map(lambda word: word.replace("&quot;",""))
+splt = splt.map(lambda word: word.replace("&amp;",""))
 cleanWords = splt.map(lambda word: word.strip(punctuation))
-cleanWords = cleanWords.filter(lambda word:len(word)>0)
+cleanWords = cleanWords.filter(lambda word:len(word)>2)
 
 #Removing StopWord
-stopWordFile = sc.textFile("/home/vyom/UGA/DSP/Project1/stopwords.txt")
+stopWordFile = sc.textFile("stopwords.txt")
 stopWord = sc.broadcast(stopWordFile.collect())
 lessWords = cleanWords.filter(lambda x: x not in stopWord.value)
 
@@ -55,7 +56,7 @@ lessWords = cleanWords.filter(lambda x: x not in stopWord.value)
 # In[6]:
 
 
-word = lessWords.map(lambda word : (word,1))
+word = cleanWords.map(lambda word : (word,1))
 
 
 # In[7]:
@@ -294,14 +295,11 @@ labelWordCount =sc.broadcast(labelWC.collectAsMap())
 
 def countWord2(x):
     dictionary={}
-    for word in wordList.value:
-        if word in x[1]:
-            if word not in dictionary:
-                dictionary[word] = 1
-            else:
-                dictionary[word] = dictionary[word]+1
+    for word in x[1]:
+        if word not in dictionary:
+            dictionary[word] = 1
         else:
-            dictionary[word] = 0
+            dictionary[word] = dictionary[word]+1
     return (x[0],dictionary)
 
 
@@ -314,10 +312,21 @@ ProbDocListCount = ProbDocList.map(lambda x: countWord2(x))
 # In[37]:
 
 
-ProbDocListCount.collect()
+def addAllwords(x):
+    tempDict=x[1]
+    for word in wordList.value:
+        if word not in x[1]:
+            tempDict[word] = 0
+    return (x[0],tempDict)
 
 
 # In[38]:
+
+
+ProbDocListAll = ProbDocListCount.map(lambda x: addAllwords(x))
+
+
+# In[39]:
 
 
 def getWordProbability(x):
@@ -327,16 +336,10 @@ def getWordProbability(x):
     return (x[0],tempDict)
 
 
-# In[39]:
-
-
-wordProbability = ProbDocListCount.map(lambda x: getWordProbability(x))
-
-
 # In[40]:
 
 
-wordProbability.collect()
+wordProbability = ProbDocListAll.map(lambda x: getWordProbability(x))
 
 
 # In[41]:
@@ -353,7 +356,6 @@ def getLogProb(x):
 
 
 logProbability = wordProbability.map(lambda x: getLogProb(x))
-logProbability.collect()
 
 
 # ## Calculating Class Probability
@@ -368,7 +370,7 @@ classCount = classList.map(lambda x: (x,1)).reduceByKey(add)
 # In[44]:
 
 
-classProbability = classCount.map(lambda x: (x[0],x[1]/numberOfDocs.value))
+classProbability = classCount.map(lambda x: (x[0],math.log(x[1]/numberOfDocs.value)))
 classProb = sc.broadcast(classProbability.collectAsMap())
 
 
@@ -394,8 +396,8 @@ print(sums)
 # In[47]:
 
 
-testDocuments = sc.textFile("/home/vyom/UGA/DSP/Project1/X_test_vsmall.txt")
-testLabels = sc.textFile("/home/vyom/UGA/DSP/Project1/y_test_vsmall.txt")
+testDocuments = sc.textFile("/home/vyom/UGA/DSP/Project1/X_test_small.txt")
+testLabels = sc.textFile("y_test_small.txt")
 
 
 # In[48]:
@@ -423,7 +425,7 @@ def TestLogProbSum(x):
             if word in x[1]:
                 logSum=logSum+x[1][word]
             else:
-                logSum = logSum+ 1/labelWordCount.value[x[0]]
+                logSum = logSum+ 1/numWords.value
         tempDict[i]= logSum
     return (x[0],tempDict)
 
@@ -440,7 +442,7 @@ logProbSum = logProbability.map(lambda x: TestLogProbSum(x))
 def getPrediction(x):
     tempDict={}
     for k,v in x[1].items():
-        tempDict[k]= v*classProb.value[x[0]]
+        tempDict[k]= v+classProb.value[x[0]]
     return(x[0],tempDict)
 
 
@@ -453,5 +455,49 @@ prediction = logProbSum.map(lambda x: getPrediction(x))
 # In[54]:
 
 
-print(prediction.collect())
+def dictToTupple(x):
+    tempList=[]
+    for k, v in x[1].items():
+        tempList.append((k,(x[0],v)))
+    return tempList
+
+
+# In[55]:
+
+
+predictComparison = sc.parallelize(prediction.map(lambda x: dictToTupple(x)).reduce(add)).reduceByKey(add)
+
+
+# In[56]:
+
+
+def getPrediction(x):
+    tempList = []
+    for i in x:
+        if type(i) == float:
+            tempList.append(i)
+    return x[tempList.index(max(tempList))*2]
+
+
+# In[57]:
+
+
+predicted = predictComparison.map(lambda x: getPrediction(x[1])).collect()
+
+
+# In[58]:
+
+
+correctLabel = testLabels.collect()
+
+
+# In[59]:
+
+
+count = 0
+for i in range(len(predicted)):
+    if predicted[i] in correctLabel[i]:
+        count = count+1
+accuracy = count/len(predicted)
+print(accuracy)
 
