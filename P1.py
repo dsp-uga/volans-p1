@@ -4,8 +4,8 @@
 # In[1]:
 
 
-import findspark
-findspark.init()
+#import findspark
+#findspark.init()
 import pyspark
 from operator import add, itemgetter
 import json
@@ -13,7 +13,7 @@ from string import punctuation
 import math
 from pyspark.conf import SparkConf
 from string import punctuation
-
+import sys
 
 # # Calculating count of words in all docs combined
 
@@ -26,13 +26,13 @@ sc = pyspark.SparkContext('local',appName="DocClassification")
 # In[3]:
 
 
-documents = sc.textFile("/home/vyom/UGA/DSP/Project1/X_train_small.txt")
+documents = sc.textFile(str(sys.argv[1]))
 
 
 # In[4]:
 
 
-labels = sc.textFile("/home/vyom/UGA/DSP/Project1/y_train_small.txt")
+labels = sc.textFile(str(sys.argv[2]))
 
 
 # In[5]:
@@ -48,7 +48,7 @@ cleanWords = splt.map(lambda word: word.strip(punctuation))
 cleanWords = cleanWords.filter(lambda word:len(word)>2)
 
 #Removing StopWord
-stopWordFile = sc.textFile("stopwords.txt")
+stopWordFile = sc.textFile(str(sys.argv[3]))
 stopWord = sc.broadcast(stopWordFile.collect())
 lessWords = cleanWords.filter(lambda x: x not in stopWord.value)
 
@@ -77,9 +77,6 @@ CountinAllDocs = CountinAllDocs.sortBy(lambda x: x[1],False)
 numWords = sc.broadcast(CountinAllDocs.count())
 numDocs = sc.broadcast(documents.count())
 wordList = sc.broadcast(CountinAllDocs.keys().collect())
-
-
-# # Calculating term frequency in each doc
 
 # In[10]:
 
@@ -124,81 +121,6 @@ def countWord(x):
 bagOfWords = documents.map(lambda word: word.lower().split())
 bagOfWords = bagOfWords.map(lambda x: stripWord(x))
 bagOfWords = bagOfWords.map(lambda x: stripStopWord(x))
-tf = bagOfWords.map(lambda x: countWord(x))
-
-
-# # Calculating idf
-
-# In[14]:
-
-
-def uniques(x):
-    tempList=[]
-    for word in x:
-        if word not in tempList:
-            tempList.append(word);
-    return tempList
-
-
-# In[15]:
-
-
-uniqueList = tf.map(lambda x: uniques(x))
-
-
-# In[16]:
-
-
-def initializeMap(x):
-    tempList = []
-    for word in x:
-        tempList.append((word,1))
-    return tempList
-
-
-# In[17]:
-
-
-occurences = sc.parallelize(uniqueList.map(lambda x: initializeMap(x)).reduce(add))
-occurences = occurences.reduceByKey(add)
-
-
-# In[18]:
-
-
-idf = occurences.map(lambda x: (x[0],math.log(numDocs.value/x[1])))
-
-
-# In[19]:
-
-
-idf2 = sc.broadcast(idf.collectAsMap())
-
-
-# # Calculating Tf-idf
-
-# In[20]:
-
-
-def getTfidf(x):
-    tempDict={}
-    idfDict=idf2.value
-    for k,v in x.items():
-        tempDict[k] = v*idfDict[k]
-    return tempDict
-
-
-# In[21]:
-
-
-tfidf = tf.map(lambda x: getTfidf(x) )
-
-
-# In[22]:
-
-
-tfidfSorted = tfidf.map(lambda x: sorted(x.items(), key=itemgetter(1), reverse = True))
-
 
 # # Implementing Naive Bayes
 
@@ -332,7 +254,7 @@ ProbDocListAll = ProbDocListCount.map(lambda x: addAllwords(x))
 def getWordProbability(x):
     tempDict={}
     for k,v in x[1].items():
-        tempDict[k]= (v+1)/(numWords.value + labelWordCount.value[x[0]])
+        tempDict[k]= (v+1)/float((numWords.value + labelWordCount.value[x[0]]))
     return (x[0],tempDict)
 
 
@@ -370,7 +292,7 @@ classCount = classList.map(lambda x: (x,1)).reduceByKey(add)
 # In[44]:
 
 
-classProbability = classCount.map(lambda x: (x[0],math.log(x[1]/numberOfDocs.value)))
+classProbability = classCount.map(lambda x: (x[0],math.log(x[1]/float(numberOfDocs.value))))
 classProb = sc.broadcast(classProbability.collectAsMap())
 
 
@@ -396,9 +318,7 @@ print(sums)
 # In[47]:
 
 
-testDocuments = sc.textFile("/home/vyom/UGA/DSP/Project1/X_test_small.txt")
-testLabels = sc.textFile("y_test_small.txt")
-
+testDocuments = sc.textFile(str(sys.argv[4]))
 
 # In[48]:
 
@@ -425,7 +345,7 @@ def TestLogProbSum(x):
             if word in x[1]:
                 logSum=logSum+x[1][word]
             else:
-                logSum = logSum+ 1/numWords.value
+                logSum = logSum+ 1/float(numWords.value)
         tempDict[i]= logSum
     return (x[0],tempDict)
 
@@ -488,16 +408,7 @@ predicted = predictComparison.map(lambda x: getPrediction(x[1])).collect()
 # In[58]:
 
 
-correctLabel = testLabels.collect()
-
-
-# In[59]:
-
-
-count = 0
-for i in range(len(predicted)):
-    if predicted[i] in correctLabel[i]:
-        count = count+1
-accuracy = count/len(predicted)
-print(accuracy)
+result = open('y_test_large.txt', 'w')
+for labels in predicted:
+    result.write("%s\n" % labels)
 
