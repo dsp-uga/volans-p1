@@ -29,7 +29,8 @@ object nbayes {
         val X = sc.textFile(trainX).zipWithIndex.map{case(k,v) => (v,k)}
         val y = sc.textFile(trainy).zipWithIndex.map{case(k,v) => (v,k)}
 
-        //X.foreach(println(_))
+
+        //y.foreach(println(_))
 
         val tX = sc.textFile(testX).zipWithIndex.map{case(k,v) => (v,k)}
         val ty = sc.textFile(testy).zipWithIndex.map{case(k,v) => (v,k)}
@@ -47,11 +48,12 @@ object nbayes {
         //data.foreach(println(_)) 
       
         val totalDocuments = data.count()
-        println(totalDocuments)
+
+        //println(totalDocuments)
 
         
         //Train
-        val (model,vocabulary) = NaiveBayes.train(data,totalDocuments)
+        val (model,vocabulary) =  NaiveBayes.train(data,totalDocuments)
 
         //model.foreach(println(_))
         
@@ -62,7 +64,7 @@ object nbayes {
 
         //v.foreach(println(_))
 
-        val result = NaiveBayes.test(tX,ty,model,vo)
+       val result = NaiveBayes.test(tX,ty,model,vo)
             
 
    

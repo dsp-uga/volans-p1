@@ -9,6 +9,9 @@ package nb
 import org.apache.spark.rdd.RDD
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.SparkContext
+import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
+
 
 object NaiveBayes {
 
@@ -16,6 +19,9 @@ object NaiveBayes {
 		
 		
 		val sc = data.sparkContext
+
+		//data.foreach(println(_))
+
 		//Step 1: Find P(Cj) = Number of documents of label j/ Total nnumber of documents
 		val PCj = data.map{case(label,doc) => (label,1)}.reduceByKey(_+_).map{case(label,count) => (label,math.log((count.toFloat/totalDocuments.toFloat)))}
 		//PCj.foreach(println(_))
@@ -33,13 +39,14 @@ object NaiveBayes {
 			words.map{case(a) => (label,a)
 			}
 		}
+		//wordsOfDoc.foreach(println(_))
 
 		//Preprocess the above result to count the unique words for each label. Output: ((key,word), count_for_that_word)
 		val vv = wordsOfDoc.map{case(doc,word) => 
 			val clean = word.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", "")
 			(doc,clean)
 		}.filter{case(doc,word) => word.length >1}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
-		//numerator.foreach(println(_))
+		//vv.foreach(println(_))
 
 
 		//Compute the Vocabulary: Unique number of words in all documents combined. (Needed for laplace smoothing)
@@ -74,8 +81,18 @@ object NaiveBayes {
 			
 		}.flatMap(x => x)
 
-		//addwords.foreach(println(_))
-		
+
+		//val countsofwords = addwords.map{case(key,(word,count)) => (key,1)}.reduceByKey(_+_)
+
+		//countsofwords.foreach(println(_))
+
+
+		/*val t = addwords.collect()
+		for(i<- t)
+		{
+			
+			println(i)
+			}	*/
 
 
 		//Now we need to find the probability, Output: Numerator/Denominator. Let us join both on the label.
@@ -83,16 +100,17 @@ object NaiveBayes {
 
 		//joined.foreach(println(_))
 		//val Pwi_cj = joined.map{case(label,((word,count),(total,vocab))) => (label,(word,math.log((count.toFloat+1)/(total.toFloat+vocab.toFloat))))}
-		val Pwi_cj = joined.map{case(label,((word,count),denom)) => (label,(word,math.log((count.toFloat+1)/denom)))}
+		val Pwi_cj = joined.map{case(label,((word,count),denom)) => (label,(word,math.log((count.toFloat+1.0)/denom)))}
 
 		//val t = Pwi_cj.map{case(label,(word,pwicj)) => (label,pwicj)}.reduceByKey{case(accCount,count) => accCount + count }
 		//joined.foreach(println(_))
-		//t.foreach(println(_))
+		//Pwi_cj.foreach(println(_))
 
 		val model = PCj.join(Pwi_cj).map{case(label, ((prob1, (word, prob2)))) => (word,label,prob1,prob2)}
 		//model.foreach(println(_))
 		(model,vocabCount.toInt)
 		//(PCj,Pwi_cj,vocabulary)
+		
 
 
 
@@ -129,42 +147,94 @@ object NaiveBayes {
 		//val testing = pjs.map{case(word,(label,pwicj)) => (label,pwicj)}.reduceByKey{case(accCount,count) => accCount + count }
 		//pjs.foreach(println)
 	
-		val condProb = testdata.leftOuterJoin(pjs).map{case(word,(index,stuff)) =>
+		val condProb = testdata.leftOuterJoin(pjs)
+
+
+		val condProb1 = condProb.filter{case(word,(index,stuff)) => stuff!= None}
+		val v1 = condProb1.map{case(word,(index,stuff)) =>
+			
+				val t = stuff.get
+				((t._1,index),t._2)
+				
+			
+		}.reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
+			(index,(val1.toFloat+val2.toFloat,label))
+			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
+
+		/*
+
+		val condProb2 = condProb.filter{case(word,(index,stuff)) => stuff == None}
+		val v2 = condProb2.map{case(word,(index,stuff)) =>
 
 			val vocab = v.value
+			val arr = Array("GCAT","MCAT","ECAT","CCAT")
+			//println(vocab)
+			val smoothing = math.log(1/(vocab.toFloat))
 
-			println(vocab)
+			arr.map{case(a) => ((a,index),smoothing)}//.flatMap(x=> x)
+
+				
+				
+		}.flatMap{x => 
+
+*/
+		
+
+
+		/*.map{case(word,(index,stuff)) =>
+
+			val vocab = v.value
+			val arr = Array("GCAT","MCAT","ECAT","CCAT")
+			//println(vocab)
 			val smoothing = math.log(1/(vocab.toFloat))
 
 			var value = 0.0
 			if(stuff == None)
 			{
 				value = smoothing
-				(("CCAT",index),value)
-				(("ECAT",index),value)
-				(("GCAT",index),value)
-				(("MCAT",index),value)
- 					
-				
 
-			}
-			else{
+				arr.map{case(a) => ((a,index),value)}//.flatMap(x=> x)
+
+				
+				
+		}}//.flatMap(x => x)*/
+
+
+
+
+		
+		/*val condProb2 = condProb1.map{case(word,(index,stuff)) =>
+			
 				val t = stuff.get
 				((t._1,index),t._2)
 				
-			}
+			
 		}.reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
 			(index,(val1.toFloat+val2.toFloat,label))
-			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
+			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)*/
 
 		
 
-		condProb.foreach(println(_))
+		//v1.foreach(println(_))
 
-		
+		//(335,(-949.28455,MCAT))
+
+		val r = v1.join(labels)//.map{case()}
+
+		val x = r.map{case(index,((score,label),values)) => 
+			
+			if(values.contains(label)){
+				1
+			}
+			else
+				0
 
 
+			
 
+		}.reduce(_+_)
+
+		println(x/818.0)
 
 
 
@@ -172,7 +242,6 @@ object NaiveBayes {
 
 
 	}
-
 
 
 	
