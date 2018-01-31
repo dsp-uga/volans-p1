@@ -1,9 +1,17 @@
-import argparse
+
+# coding: utf-8
+
+# Command to execute
+"""
+spark-submit naive-bayes.py -X_train dataset/training_set/X_train_vsmall.txt -X_test dataset/label_set/y_train_vsmall.txt -Y_train dataset/training_set/X_test_vsmall.txt -stopwords /Volumes/OSX-DataDrive/stopwords.txts
+
+"""
+
+
 from pyspark import *
 from pyspark.sql import *
-from pyspark import SQLContext
+from pyspark import SparkContext,SQLContext
 from pyspark.ml.feature import StopWordsRemover
-from pyspark import SparkContext
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
@@ -20,103 +28,41 @@ import json
 import re
 
 
-# In[18]:
-sc = SparkContext()
+# In[10]:
 
+
+sc = SparkContext()
 sqlContext = SQLContext(sc)
 
+split_size = 10
 
 
+# In[18]:
+
+
+import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument("--X_train", help="X_training set")
-parser.add_argument("--X_test", help="X training label set")
-parser.add_argument("--Y_train", help="Y training text set")
-parser.add_argument("--stopwords",help="Stopwords file")
+parser.add_argument("-X_train", help="X_training set")
+parser.add_argument("-X_test", help="X training label set")
+parser.add_argument("-Y_train", help="Y training text set")
+parser.add_argument("-stopwords",help="Stopwords file")
 args = parser.parse_args()
 print(args.X_train)
 print(args.X_test)
 print(args.Y_train)
-print(args.Y_test)
-print(args.stopword)
+print(args.stopwords)
 
 
 # In[11]:
 
 
-stopwords=args.stopword
-
-
 # In[12]:
 
 
-stopword_rdd = sc.textFile(args.stopword)
+stopword_rdd = sc.textFile(args.stopwords)
 stopword_list = stopword_rdd.map(lambda l:l.strip()).collect()
 print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
-
-
-# In[ ]:
-
-
-ord_count = list();
-df_1 = preprocess(args.X_test,"label")
-df_2 = preprocess(args.X_train,"text")
-text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
-text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
-#text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
-#text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
-#print(text_table.take(10))
-df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
-df.registerTempTable("dataset") #establish main table
-
-
-# In[13]:
-
-
-ecat = sqlContext.sql("Select * from dataset where label='ecat'")
-mcat = sqlContext.sql("Select * from dataset where label='mcat'")
-gcat = sqlContext.sql("Select * from dataset where label='gcat'")
-ccat = sqlContext.sql("Select * from dataset where label='ccat'")
-
-
-
-
-
-prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
-#prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
-#prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
-#prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
-prob_ccat = prob_ccat.drop('label')
-prob_ccat.registerTempTable('CCAT')
-prob_ccat.cache()
-prob_ccat.count()
-
-#prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
-prob_mcat = calculate_prob(mcat,"mcat",mcat_count)
-#prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
-#prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
-#prob_mcat = prob_mcat.drop('label')
-prob_mcat.registerTempTable('MCAT')
-prob_mcat.cache()
-
-prob_mcat.count()
-#prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
-#prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
-prob_gcat = calculate_prob(gcat,"gcat",gcat_count)
-#prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
-prob_gcat = prob_gcat.drop('label')
-prob_gcat.registerTempTable('GCAT')
-prob_gcat.cache()
-prob_gcat.count()
-#prob_ecat = calculate_prob(prob_gcat,"ecat",ecat_count)
-#prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
-#prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
-#prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
-prob_ecat = calculate_prob(ecat,"ecat",ecat_count)
-prob_ecat = prob_ecat.drop('label')
-prob_ecat.registerTempTable('ECAT')
-prob_ecat.cache()
-prob_ecat.count()
 
 
 # In[14]:
@@ -323,13 +269,77 @@ def preprocess(fileName,colname):
     return df;
 
 
+# In[ ]:
+
+
+ord_count = list();
+df_1 = preprocess(args.X_test,"label")
+df_2 = preprocess(args.X_train,"text")
+text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
+text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
+#text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
+#text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
+#print(text_table.take(10))
+df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
+df.registerTempTable("dataset") #establish main table
+
+
+# In[13]:
+
+
+ecat = sqlContext.sql("Select * from dataset where label='ecat'")
+mcat = sqlContext.sql("Select * from dataset where label='mcat'")
+gcat = sqlContext.sql("Select * from dataset where label='gcat'")
+ccat = sqlContext.sql("Select * from dataset where label='ccat'")
+
+
+
+
+
+prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
+#prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
+#prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
+#prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
+prob_ccat = prob_ccat.drop('label')
+prob_ccat.registerTempTable('CCAT')
+prob_ccat.cache()
+prob_ccat.count()
+
+#prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
+prob_mcat = calculate_prob(mcat,"mcat",mcat_count)
+#prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
+#prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
+#prob_mcat = prob_mcat.drop('label')
+prob_mcat.registerTempTable('MCAT')
+prob_mcat.cache()
+
+prob_mcat.count()
+#prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
+#prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
+prob_gcat = calculate_prob(gcat,"gcat",gcat_count)
+#prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
+prob_gcat = prob_gcat.drop('label')
+prob_gcat.registerTempTable('GCAT')
+prob_gcat.cache()
+prob_gcat.count()
+#prob_ecat = calculate_prob(prob_gcat,"ecat",ecat_count)
+#prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
+#prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
+#prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
+prob_ecat = calculate_prob(ecat,"ecat",ecat_count)
+prob_ecat = prob_ecat.drop('label')
+prob_ecat.registerTempTable('ECAT')
+prob_ecat.cache()
+prob_ecat.count()
+
+
 # In[15]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
 word_count = list();
 
-rdd = sc.textFile(path_test+testFile[0])
+rdd = sc.textFile(args.X_test)
 rdd  = rdd.map(lambda l:l.lower()).zipWithIndex();
 df_1 = sqlContext.createDataFrame(rdd,schema=['label','key'])
 df_2 = preprocess(path+textFile[0],"text")
