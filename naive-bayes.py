@@ -188,7 +188,7 @@ def calculate_class_prob(text,name):
         result = [i.gcat for i in result]
     elif name =='mcat':
         result = [i.mcat for i in result]
-   
+ 
     
     result = reduce(lambda x, y: x + y, result)
     
@@ -272,8 +272,15 @@ def preprocess(fileName,colname):
 # In[ ]:
 
 
-ord_count = list();
-df_1 = preprocess(args.X_test,"label")
+
+
+#BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
+word_count = list();
+
+
+rdd = sc.textFile(args.X_test)
+rdd  = rdd.map(lambda l:l.lower()).zipWithIndex();
+df_1 = sqlContext.createDataFrame(rdd,schema=['label','key'])
 df_2 = preprocess(args.X_train,"text")
 text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
 text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
@@ -282,6 +289,23 @@ text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:
 #print(text_table.take(10))
 df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
 df.registerTempTable("dataset") #establish main table
+
+
+
+mcat_count = text_table.filter(lambda l:l[1].lower().strip()=='mcat').count()+1000
+ccat_count = text_table.filter(lambda l:l[1].lower().strip()=='ccat').count()+1000
+gcat_count = text_table.filter(lambda l:l[1].lower().strip()=='gcat').count()+1000
+ecat_count = text_table.filter(lambda l:l[1].lower().strip()=='ecat').count()+1000
+
+
+print(mcat_count)
+print(ccat_count)
+print(gcat_count)
+print(ecat_count)
+
+total = ccat_count + mcat_count + ecat_count + gcat_count+1
+
+
 
 
 # In[13]:
@@ -333,41 +357,6 @@ prob_ecat.cache()
 prob_ecat.count()
 
 
-# In[15]:
-
-
-#BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
-word_count = list();
-
-rdd = sc.textFile(args.X_test)
-rdd  = rdd.map(lambda l:l.lower()).zipWithIndex();
-df_1 = sqlContext.createDataFrame(rdd,schema=['label','key'])
-df_2 = preprocess(path+textFile[0],"text")
-text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l))
-
-mcat_count = text_table.filter(lambda l:l[1].lower().strip()=='mcat').count()+1000
-ccat_count = text_table.filter(lambda l:l[1].lower().strip()=='ccat').count()+1000
-gcat_count = text_table.filter(lambda l:l[1].lower().strip()=='gcat').count()+1000
-ecat_count = text_table.filter(lambda l:l[1].lower().strip()=='ecat').count()+1000
-
-
-print(mcat_count)
-print(ccat_count)
-print(gcat_count)
-print(ecat_count)
-
-total = ccat_count + mcat_count + ecat_count + gcat_count+1
-
-
-text_table = text_table.flatMap(lambda l:split_word(l));
-text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(l[0],l[1]+1000)).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
-#text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
-#text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
-#print(text_table.take(10))
-df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
-df.registerTempTable("dataset") #establish main table
-
-   
 
 
 
