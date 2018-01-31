@@ -1,16 +1,16 @@
-
-# coding: utf-8
-
-# In[99]:
-
-
+import argparse
 from pyspark import *
 from pyspark.sql import *
-from pyspark import SparkContext,SQLContext
+from pyspark import SQLContext
 from pyspark.ml.feature import StopWordsRemover
+from pyspark import SparkContext
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+
 from functools import reduce
+import string 
+import math
+import math
 
 from pyspark.sql.functions import udf
 import numpy as np
@@ -20,48 +20,125 @@ import json
 import re
 
 
-# In[100]:
-
-
+# In[18]:
 sc = SparkContext()
+
 sqlContext = SQLContext(sc)
 
-split_size = 10
 
 
-# In[101]:
+parser = argparse.ArgumentParser()
+parser.add_argument("--X_train", help="X_training set")
+parser.add_argument("--X_test", help="X training label set")
+parser.add_argument("--Y_train", help="Y training text set")
+parser.add_argument("--stopwords",help="Stopwords file")
+args = parser.parse_args()
+print(args.X_train)
+print(args.X_test)
+print(args.Y_train)
+print(args.Y_test)
+print(args.stopword)
 
 
-textFile=["X_train_vsmall.txt"]
-testFile=["y_train_vsmall.txt"]
-path = "/Volumes/OSX-DataDrive/data-distributed/dataset/training_set/"
-path_test = "/Volumes/OSX-DataDrive/data-distributed/dataset/label_set/"
-stopwords="/Volumes/OSX-DataDrive/data-distributed/stopwords.txts"
+# In[11]:
 
 
-# In[102]:
+stopwords=args.stopword
 
 
-stopword_rdd = sc.textFile(stopwords)
+# In[12]:
+
+
+stopword_rdd = sc.textFile(args.stopword)
 stopword_list = stopword_rdd.map(lambda l:l.strip()).collect()
 print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
 
 
-# In[130]:
+# In[ ]:
+
+
+ord_count = list();
+df_1 = preprocess(args.X_test,"label")
+df_2 = preprocess(args.X_train,"text")
+text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
+text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
+#text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
+#text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
+#print(text_table.take(10))
+df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
+df.registerTempTable("dataset") #establish main table
+
+
+# In[13]:
+
+
+ecat = sqlContext.sql("Select * from dataset where label='ecat'")
+mcat = sqlContext.sql("Select * from dataset where label='mcat'")
+gcat = sqlContext.sql("Select * from dataset where label='gcat'")
+ccat = sqlContext.sql("Select * from dataset where label='ccat'")
+
+
+
+
+
+prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
+#prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
+#prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
+#prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
+prob_ccat = prob_ccat.drop('label')
+prob_ccat.registerTempTable('CCAT')
+prob_ccat.cache()
+prob_ccat.count()
+
+#prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
+prob_mcat = calculate_prob(mcat,"mcat",mcat_count)
+#prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
+#prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
+#prob_mcat = prob_mcat.drop('label')
+prob_mcat.registerTempTable('MCAT')
+prob_mcat.cache()
+
+prob_mcat.count()
+#prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
+#prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
+prob_gcat = calculate_prob(gcat,"gcat",gcat_count)
+#prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
+prob_gcat = prob_gcat.drop('label')
+prob_gcat.registerTempTable('GCAT')
+prob_gcat.cache()
+prob_gcat.count()
+#prob_ecat = calculate_prob(prob_gcat,"ecat",ecat_count)
+#prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
+#prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
+#prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
+prob_ecat = calculate_prob(ecat,"ecat",ecat_count)
+prob_ecat = prob_ecat.drop('label')
+prob_ecat.registerTempTable('ECAT')
+prob_ecat.cache()
+prob_ecat.count()
+
+
+# In[14]:
 
 
 def clean(x):
     x = x.strip()
     x = x.lower()
     x = x.replace('.',' ')
-    x = x.replace('\\',' ')
-    x = x.replace(':',' ')
+    x = x.replace('\\','')
+    x = x.replace(':','')
     x = x.replace('/','')
     x = x.replace('*','')
    
-    temp = ['?','!','.','/','’',']','[',',','[',']','@','^','{','}','%','*','#','?--']
+    temp = ['?','!','.','/','’',']','[',',','[',']','@','^','{','}','%','*','#','?--','&quot;']
     x = replace_all(x,temp)
+    x = replace_all(x,string.punctuation)
+    x = ' '.join(i.strip() for i in x.split() if not i.isdigit())
+    x = set(x.split(' ')) - set(stopwords.value)
+
+    #https://stackoverflow.com/questions/12851791/removing-numbers-from-string
+    x = ' '.join(x)
     if len(x) <=1:
         return None;
     return x
@@ -70,8 +147,10 @@ def clean(x):
 
 def replace_all(x,dataset):
     for i in dataset:
+        if i == ' ':
+            continue; #ignore space
         x = x.replace(i,'')
-    return x
+    return x.strip()
         
 def exist(x,dataset):
     for i in dataset:
@@ -103,13 +182,12 @@ def build_dict(entries):
     return temp
 
 def save_dict(entries,filename=""):
-    print(len(entries))
     dict_entry = build_dict(entries)
     json.dump(dict_entry,open(filename,"w"))
 
 
 def calculate_probability(x,count):
-    return float(x/count)
+    return math.log((float(x)/count)*1000) #scaling factor
 def calculate_prob(df,label,count):
     udf_prob = udf(lambda l:calculate_probability(l,count),FloatType())
     df = df.withColumn(label, udf_prob("count"))
@@ -139,19 +217,19 @@ def calculate_tf_idf(x):
     return [x[0],x[1]*x[-1],x[2]*x[-1],x[3]*x[-1],x[4]*x[-1],x[5]*x[-1],x[6]*x[-1],x[7]*x[-1],x[8]*x[-1]]
 
 
-def naive_bayes(text):
-    ecat = calculate_class_prob(text,'ecat')
-    mcat = calculate_class_prob(text,'mcat')
-    ccat = calculate_class_prob(text,'ccat')
-    gcat = calculate_class_prob(text,'gcat')
+def naive_bayes(text,prob_ccat,prob_ecat,prob_gcat,prob_mcat):
+    ecat = calculate_class_prob(text,'ecat')+prob_ecat
+    mcat = calculate_class_prob(text,'mcat')+ prob_mcat
+    ccat = calculate_class_prob(text,'ccat')+ prob_ccat
+    gcat = calculate_class_prob(text,'gcat')+ prob_gcat
     if ecat > mcat and ecat > ccat and ecat > gcat:
-        return 0
+        return 'ECAT'
     elif mcat > ecat and mcat > ccat and mcat > gcat:
-        return 1
+        return 'MCAT'
     elif ccat > mcat and ccat > ecat and ccat > gcat:
-        return 2
+        return 'CCAT'
     elif gcat > mcat and gcat > ccat and gcat > ecat:
-        return 3
+        return 'GCAT'
 
 def calculate_class_prob(text,name):
     query = split_query(text,name)
@@ -164,8 +242,9 @@ def calculate_class_prob(text,name):
         result = [i.gcat for i in result]
     elif name =='mcat':
         result = [i.mcat for i in result]
-        
-    result = reduce(lambda x, y: x*y, result)
+   
+    
+    result = reduce(lambda x, y: x + y, result)
     
     return result
 
@@ -182,11 +261,11 @@ def build_ngram(x,length,identifier='::'):
     return temp;
 
 def split_query(text,name,split_size=10):
-    text = text.replace("'",'');
-    text = text.replace('"','');
-    text = list(set(text.split(' ')));
+    text = clean(text)
+    text = [i.strip().lower() for i in text.split()]
+       
+    
     result = None
-   
     slots = int(len(text)/split_size)
    
     chunks = np.array_split(text,slots)
@@ -210,7 +289,6 @@ def build_query(data,name):
     query = "Select * from " + name +  " where text='"+data[0]+"'"
     for i in range(1,len(data)):
         query = query + " or text='"+data[i]+"'" 
-    print(query)
     return query
 
 #https://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks
@@ -238,31 +316,48 @@ def split_word(x):
     result = [(i.strip(),label,1) for i in word_list]
     return result;
 def preprocess(fileName,colname):
-    rdd = sc.textFile(fileName).map(lambda l:l.lower()).zipWithIndex();
+    
+    rdd = sc.textFile(fileName).map(lambda l:l.lower()).map(lambda l:clean(l)).zipWithIndex();
     #rdd = rdd.flatMap(lambda l: build_ngram(l.strip(),3)).reduceByKey(lambda a,b:a+b).map(lambda l: reverse_ngram(l)).sortByKey()
     df = sqlContext.createDataFrame(rdd,schema=[colname,'key'])
     return df;
 
 
-# In[131]:
+# In[15]:
 
 
 #BUILD INDIVIUAL RDD FOR EACH DOCUMENT INORDER TO MERGET TO THE MASTER KEY SET
 word_count = list();
 
-df_1 = preprocess(path_test+testFile[0],"label")
+rdd = sc.textFile(path_test+testFile[0])
+rdd  = rdd.map(lambda l:l.lower()).zipWithIndex();
+df_1 = sqlContext.createDataFrame(rdd,schema=['label','key'])
 df_2 = preprocess(path+textFile[0],"text")
-text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
-text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
+text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l))
+
+mcat_count = text_table.filter(lambda l:l[1].lower().strip()=='mcat').count()+1000
+ccat_count = text_table.filter(lambda l:l[1].lower().strip()=='ccat').count()+1000
+gcat_count = text_table.filter(lambda l:l[1].lower().strip()=='gcat').count()+1000
+ecat_count = text_table.filter(lambda l:l[1].lower().strip()=='ecat').count()+1000
+
+
+print(mcat_count)
+print(ccat_count)
+print(gcat_count)
+print(ecat_count)
+
+total = ccat_count + mcat_count + ecat_count + gcat_count+1
+
+
+text_table = text_table.flatMap(lambda l:split_word(l));
+text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(l[0],l[1]+1000)).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
 #text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
 #text_table =text_table.flatMap(lambda l:(l[0][0],l[0][1]),l[0][2]).reduceByKey(lambda a,b:a+b)
 #print(text_table.take(10))
 df = sqlContext.createDataFrame(text_table,schema=['text','label','count'])
 df.registerTempTable("dataset") #establish main table
 
-
-                    
-
+   
 
 
 
@@ -270,64 +365,24 @@ df.registerTempTable("dataset") #establish main table
 
 
 
+# In[16]:
 
 
+f = open(args.Y_train)
+f_output = open("output.txt","w")
+print(ccat_count)
+print(ccat_count)
+ccat_count = math.log(ccat_count*1000)
+ecat_count = math.log(ecat_count*1000) 
+gcat_count = math.log(gcat_count*1000) 
+mcat_count = math.log(mcat_count*1000)
 
-# In[135]:
-
-
-ecat = sqlContext.sql("Select * from dataset where label='ecat'")
-mcat = sqlContext.sql("Select * from dataset where label='mcat'")
-gcat = sqlContext.sql("Select * from dataset where label='gcat'")
-ccat = sqlContext.sql("Select * from dataset where label='ccat'")
-
-ccat_count = ccat.count();
-mcat_count = mcat.count();
-ecat_count = ecat.count();
-gcat_count = gcat.count();
-total = ccat_count + mcat_count + ecat_count + gcat_count
-
-
-prob_ccat = calculate_prob(ccat,"ccat",ccat_count)
-#prob_ccat = calculate_prob(prob_ccat,"mcat",mcat_count)
-#prob_ccat = calculate_prob(prob_ccat,"gcat",gcat_count)
-#prob_ccat = calculate_prob(prob_ccat,"ecat",ecat_count)
-prob_ccat = prob_ccat.drop('label')
-prob_ccat.registerTempTable('CCAT')
-prob_ccat.cache()
-
-#prob_mcat = calculate_prob(mcat,"ccat",ccat_count)
-prob_mcat = calculate_prob(prob_mcat,"mcat",mcat_count)
-#prob_mcat = calculate_prob(prob_mcat,"gcat",gcat_count)
-#prob_mcat = calculate_prob(prob_mcat,"ecat",ecat_count)
-#prob_mcat = prob_mcat.drop('label')
-prob_mcat.registerTempTable('MCAT')
-prob_mcat.cache()
-
-#prob_gcat = calculate_prob(gcat,"ccat",ccat_count)
-#prob_gcat = calculate_prob(prob_gcat,"mcat",mcat_count)
-prob_gcat = calculate_prob(prob_gcat,"gcat",gcat_count)
-#prob_gcat = calculate_prob(prob_gcat,"ecat",ecat_count)
-prob_gcat = prob_gcat.drop('label')
-prob_gcat.registerTempTable('GCAT')
-prob_gcat.cache()
-
-#prob_ecat = calculate_prob(ecat,"ccat",ccat_count)
-#prob_ecat = calculate_prob(prob_ecat,"mcat",mcat_count)
-#prob_ecat = calculate_prob(prob_ecat,"gcat",gcat_count)
-prob_ecat = calculate_prob(prob_ecat,"ecat",ecat_count)
-prob_ecat = prob_ecat.drop('label')
-prob_ecat.registerTempTable('ECAT')
-prob_ecat.cache()
-
-
-# In[136]:
-
-
-sc.textFile()
-text = "A dedicated &quot;snow desk&quot; has been set up by the New York and New Jersey Port Authority to monitor and react to harsh weather conditions and help prevent disruption to travellers and cargo moving through key airports this winter. The authority operates New York's John F Kennedy, LaGuardia and Newark airports and carefully tracks weather patterns all year round. Each airport supplements National Weather Service reports with facility-specific forecasts from private companies that are updated a few times a day. &quot;We don't sit and wait for the weather to hit us&quot; said the Port authority chief operations officer David Feeley. &quot;We use the latest technology to anticipate what's coming day's in advance, which allows up to plan for deployment of employees and equipment at each facility.&quot; Each airport has a &quot;snow desk&quot; at which key operations and maintenance personnel analyse the weather reports and deploy staff and equipment accordingly. Each has inground sensors transmitting data such as windspeed and direction, dewpoint, humidity, air and ground temperatures. More than 5,100 tons of salt and sand, special de-icing equipment and 250 pieces of dedicated snow-fighting equipment - including massive snow-melters and snow blowers - is on standby to counter almost any winter blast at JFK, LaGuadria and Newark airports this year. Air Cargo Newsroom Tel+44 171 542 7706 Fax+44 171 542 5017"
-print(naive_bayes(text))
-
-
+count = 0
+for i in f:
+    count = count + 1
+    print(count)
+    temp = naive_bayes(i,ccat_count,ecat_count,gcat_count,mcat_count)
+    f_output.write(temp)
+    f_output.flush();
 
 
