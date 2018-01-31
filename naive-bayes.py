@@ -19,6 +19,7 @@ from functools import reduce
 import string 
 import math
 import math
+import os
 
 from pyspark.sql.functions import udf
 import numpy as np
@@ -385,7 +386,7 @@ for i in f:
     count = count + 1
     print(count)
     temp = naive_bayes(i,ccat_count,ecat_count,gcat_count,mcat_count)
-    f_output.write(temp)
+    f_output.write(temp +os.linesep)
     f_output.flush();
 
 
