@@ -3,7 +3,7 @@
 
 # Command to execute
 """
-spark-submit naive-bayes.py -X_train dataset/training_set/X_train_vsmall.txt -X_test dataset/label_set/y_train_vsmall.txt -Y_train dataset/training_set/X_test_vsmall.txt -stopwords /Volumes/OSX-DataDrive/stopwords.txts
+spark-submit naive-bayes.py -X_train dataset/training_set/X_train_vsmall.txt -Y_train dataset/label_set/y_train_vsmall.txt -Y_test dataset/training_set/X_test_vsmall.txt -stopwords /Volumes/OSX-DataDrive/stopwords.txts
 
 """
 
@@ -43,14 +43,14 @@ split_size = 10
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("-X_train", help="X_training set")
-parser.add_argument("-X_test", help="X training label set")
-parser.add_argument("-Y_train", help="Y training text set")
+parser.add_argument("-X_test", help="X testing  set")
+parser.add_argument("-Y_train", help="Y training set")
 parser.add_argument("-stopwords",help="Stopwords file")
 args = parser.parse_args()
-print(args.X_train)
-print(args.X_test)
-print(args.Y_train)
-print(args.stopwords)
+X_train = args.X_train
+X_test = args.X_test
+Y_train = args.Y_train
+stopwords = args.stopwords
 
 
 # In[11]:
@@ -59,7 +59,7 @@ print(args.stopwords)
 # In[12]:
 
 
-stopword_rdd = sc.textFile(args.stopwords)
+stopword_rdd = sc.textFile(stopwords)
 stopword_list = stopword_rdd.map(lambda l:l.strip()).collect()
 print(stopword_list)
 stopwords = sc.broadcast(stopword_list)
@@ -178,19 +178,23 @@ def naive_bayes(text,prob_ccat,prob_ecat,prob_gcat,prob_mcat):
         return 'GCAT'
 
 def calculate_class_prob(text,name):
-    query = split_query(text,name)
-    result = query.collect()
-    if name =='ecat':
-        result = [i.ecat for i in result]
-    elif name=='ccat':
-        result = [i.ccat for i in result]
-    elif name =='gcat':
-        result = [i.gcat for i in result]
-    elif name =='mcat':
-        result = [i.mcat for i in result]
- 
-    
-    result = reduce(lambda x, y: x + y, result)
+    try:
+        query = split_query(text,name)
+        result = query.collect()
+        if name =='ecat':
+            result = [i.ecat for i in result]
+        elif name=='ccat':
+            result = [i.ccat for i in result]
+        elif name =='gcat':
+            result = [i.gcat for i in result]
+        elif name =='mcat':
+            result = [i.mcat for i in result]
+
+        
+        result = reduce(lambda x, y: x + y, result)
+    except:
+        return 1.0 #dummy probability
+
     
     return result
 
@@ -278,10 +282,10 @@ def preprocess(fileName,colname):
 word_count = list();
 
 
-rdd = sc.textFile(args.X_test)
+rdd = sc.textFile(Y_train)
 rdd  = rdd.map(lambda l:l.lower()).zipWithIndex();
 df_1 = sqlContext.createDataFrame(rdd,schema=['label','key'])
-df_2 = preprocess(args.X_train,"text")
+df_2 = preprocess(X_train,"text")
 text_table = df_1.join(df_2,df_1.key==df_2.key,"left").select('text','label').rdd.flatMap(lambda l: split_row(l)).flatMap(lambda l:split_word(l));
 text_table = text_table.map(lambda l:((l[0],l[1]),l[2])).reduceByKey(lambda a,b:a+b).map(lambda l:(str(l[0][0]),l[0][1],l[1]))
 #text_table = text_table.flatMap(lambda l:build_ngram(l,3)).reduceByKey(lambda a,b:a+b).map(lambda l:reverse_ngram(l))
@@ -367,7 +371,7 @@ prob_ecat.count()
 # In[16]:
 
 
-f = open(args.Y_train)
+f = open(X_test)
 f_output = open("output.txt","w")
 print(ccat_count)
 print(ccat_count)
