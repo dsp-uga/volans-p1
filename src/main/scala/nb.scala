@@ -24,16 +24,14 @@ object nbayes {
         val trainy = args(1)
         val testX = args(2)
         val testy = args(3)
+        val stopwordsPath = args(4)
 
         //Read the train and test data
         val X = sc.textFile(trainX).zipWithIndex.map{case(k,v) => (v,k)}
         val y = sc.textFile(trainy).zipWithIndex.map{case(k,v) => (v,k)}
-
-
-        //y.foreach(println(_))
-
         val tX = sc.textFile(testX).zipWithIndex.map{case(k,v) => (v,k)}
         val ty = sc.textFile(testy).zipWithIndex.map{case(k,v) => (v,k)}
+        val stopwords = sc.broadcast(sc.textFile(stopwordsPath).collect())
 
         //Make the 
         val documentsWithLabels = X.join(y)
@@ -53,7 +51,7 @@ object nbayes {
 
         
         //Train
-        val (model,vocabulary) =  NaiveBayes.train(data,totalDocuments)
+        val (model,vocabulary) =  NaiveBayes.train(data,totalDocuments,stopwords)
 
         //model.foreach(println(_))
         
@@ -64,7 +62,7 @@ object nbayes {
 
         //v.foreach(println(_))
 
-       val result = NaiveBayes.test(tX,ty,model,vo)
+       val result = NaiveBayes.test(tX,ty,model,vo,stopwords)
             
 
    

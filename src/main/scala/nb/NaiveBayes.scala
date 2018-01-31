@@ -9,16 +9,16 @@ package nb
 import org.apache.spark.rdd.RDD
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.SparkContext
-import scala.collection.JavaConverters._
-import scala.collection.JavaConversions._
+
 
 
 object NaiveBayes {
 
-	def train(data: RDD[(String, String)], totalDocuments: Long): (RDD[(String,String,Double,Double)],Long) ={
+	def train(data: RDD[(String, String)], totalDocuments: Long, B: Broadcast[Array[String]]): (RDD[(String,String,Double,Double)],Long) ={
 		
 		
 		val sc = data.sparkContext
+		val stopwords = B.value.toArray
 
 		//data.foreach(println(_))
 
@@ -45,7 +45,7 @@ object NaiveBayes {
 		val vv = wordsOfDoc.map{case(doc,word) => 
 			val clean = word.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", "")
 			(doc,clean)
-		}.filter{case(doc,word) => word.length >1}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
+		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word)}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
 		//vv.foreach(println(_))
 
 
@@ -82,20 +82,7 @@ object NaiveBayes {
 		}.flatMap(x => x)
 
 
-		//val countsofwords = addwords.map{case(key,(word,count)) => (key,1)}.reduceByKey(_+_)
-
-		//countsofwords.foreach(println(_))
-
-
-		/*val t = addwords.collect()
-		for(i<- t)
-		{
-			
-			println(i)
-			}	*/
-
-
-		//Now we need to find the probability, Output: Numerator/Denominator. Let us join both on the label.
+		//Now we need to find the probability, Output: Numerator/Denominator. Join both on the label.
 		val joined = addwords.join(denominators)
 
 		//joined.foreach(println(_))
@@ -118,14 +105,18 @@ object NaiveBayes {
 	
 
 
-	def test(data: RDD[(Long, String)], labels: RDD[(Long,String)], model: RDD[(String,String,Double,Double)], v: Broadcast[Int]): Unit ={
-	
-
-		
+	def test(data: RDD[(Long, String)], labels: RDD[(Long,String)], model: RDD[(String,String,Double,Double)], v: Broadcast[Int],B: Broadcast[Array[String]]): Unit ={	
 		
 
 
-//		model.foreach(println(_))
+		val stopwords = B.value.toArray
+
+
+		/*val vv = wordsOfDoc.map{case(doc,word) => 
+			val clean = word.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", "")
+			(doc,clean)
+		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word)}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}*/
+
 
 		val testdata =  data.flatMap{ case(index,doc) => 
 			val words = doc.split("\\s") 
@@ -133,7 +124,7 @@ object NaiveBayes {
 				(a.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", ""),index)
 
 				
-			}
+			}.filter{case(word,index) => word.length >1 && !stopwords.contains(word)}
 		}
 
 		//testdata.foreach(println(_))
@@ -182,27 +173,6 @@ object NaiveBayes {
 			(index,(val1.toFloat+val2.toFloat,label))
 			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
 
-
-		
-
-
-		/*.map{case(word,(index,stuff)) =>
-
-			val vocab = v.value
-			val arr = Array("GCAT","MCAT","ECAT","CCAT")
-			//println(vocab)
-			val smoothing = math.log(1/(vocab.toFloat))
-
-			var value = 0.0
-			if(stuff == None)
-			{
-				value = smoothing
-
-				arr.map{case(a) => ((a,index),value)}//.flatMap(x=> x)
-
-				
-				
-		}}//.flatMap(x => x)*/
 
 		val r = combined.join(labels)//.map{case()}
 
