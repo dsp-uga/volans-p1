@@ -136,18 +136,18 @@ def calculate_tf_idf(x):
     return [x[0],x[1]*x[-1],x[2]*x[-1],x[3]*x[-1],x[4]*x[-1],x[5]*x[-1],x[6]*x[-1],x[7]*x[-1],x[8]*x[-1]]
 
 
-def naive_bayes(text):
-    ecat = calculate_class_prob(text,'ecat')
-    mcat = calculate_class_prob(text,'mcat')
-    ccat = calculate_class_prob(text,'ccat')
-    gcat = calculate_class_prob(text,'gcat')
-    if ecat > mcat and ecat > ccat and ecat > gcat:
+def naive_bayes(text,ccat_count,ecat_count,mcat_count,gcat_count,total):
+    ecat = calculate_class_prob(text,'ecat')*math.log(float(ecat_count/total)*1000)
+    mcat = calculate_class_prob(text,'mcat')*math.log(float(mcat_count/total)*1000)
+    ccat = calculate_class_prob(text,'ccat')*math.log(float(ccat_count/total)*1000)
+    gcat = calculate_class_prob(text,'gcat')*math.log(float(gcat_count/total)*1000)
+    if ecat >= mcat and ecat >= ccat and ecat >= gcat:
         return "ECAT"
-    elif mcat > ecat and mcat > ccat and mcat > gcat:
+    elif mcat >= ecat and mcat >= ccat and mcat >= gcat:
         return "MCAT"
-    elif ccat > mcat and ccat > ecat and ccat > gcat:
+    elif ccat >= mcat and ccat >= ecat and ccat >= gcat:
         return "CCAT"
-    elif gcat > mcat and gcat > ccat and gcat > ecat:
+    elif gcat >= mcat and gcat >= ccat and gcat >= ecat:
         return "GCAT"
 
 def calculate_class_prob(text,name):
@@ -279,10 +279,10 @@ mcat = sqlContext.sql("Select * from dataset where label='mcat'")
 gcat = sqlContext.sql("Select * from dataset where label='gcat'")
 ccat = sqlContext.sql("Select * from dataset where label='ccat'")
 
-ccat_count = ccat.count()*1000;
-mcat_count = mcat.count()*1000;
-ecat_count = ecat.count()*1000;
-gcat_count = gcat.count()*1000;
+ccat_count = ccat.count();
+mcat_count = mcat.count();
+ecat_count = ecat.count();
+gcat_count = gcat.count();
 total = ccat_count + mcat_count + ecat_count + gcat_count
 
 
@@ -322,8 +322,7 @@ prob_ecat.cache()
 # In[136]:
 
 
-text = "A dedicated &quot;snow desk&quot; has been set up by the New York and New Jersey Port Authority to monitor and react to harsh weather conditions and help prevent disruption to travellers and cargo moving through key airports this winter. The authority operates New York's John F Kennedy, LaGuardia and Newark airports and carefully tracks weather patterns all year round. Each airport supplements National Weather Service reports with facility-specific forecasts from private companies that are updated a few times a day. &quot;We don't sit and wait for the weather to hit us&quot; said the Port authority chief operations officer David Feeley. &quot;We use the latest technology to anticipate what's coming day's in advance, which allows up to plan for deployment of employees and equipment at each facility.&quot; Each airport has a &quot;snow desk&quot; at which key operations and maintenance personnel analyse the weather reports and deploy staff and equipment accordingly. Each has inground sensors transmitting data such as windspeed and direction, dewpoint, humidity, air and ground temperatures. More than 5,100 tons of salt and sand, special de-icing equipment and 250 pieces of dedicated snow-fighting equipment - including massive snow-melters and snow blowers - is on standby to counter almost any winter blast at JFK, LaGuadria and Newark airports this year. Air Cargo Newsroom Tel+44 171 542 7706 Fax+44 171 542 5017"
-print(naive_bayes(text))
+
 
 
 f = open(X_test)
@@ -333,6 +332,6 @@ count = 0
 for i in f:
     count = count + 1
     print(count)
-    temp = naive_bayes(i)
+    temp = naive_bayes(i,ccat_count,ecat_count,mcat_count,gcat_count,total)
     f_output.write(temp +os.linesep)
     f_output.flush();
