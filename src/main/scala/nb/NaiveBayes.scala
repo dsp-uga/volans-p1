@@ -157,11 +157,11 @@ object NaiveBayes {
 				((t._1,index),t._2)
 				
 			
-		}.reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
+		}/*.reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
 			(index,(val1.toFloat+val2.toFloat,label))
 			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
 
-		/*
+		*/
 
 		val condProb2 = condProb.filter{case(word,(index,stuff)) => stuff == None}
 		val v2 = condProb2.map{case(word,(index,stuff)) =>
@@ -175,9 +175,14 @@ object NaiveBayes {
 
 				
 				
-		}.flatMap{x => 
+		}.flatMap{x => x}
 
-*/
+
+		val combined = v1.union(v2).reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
+			(index,(val1.toFloat+val2.toFloat,label))
+			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
+
+
 		
 
 
@@ -199,27 +204,7 @@ object NaiveBayes {
 				
 		}}//.flatMap(x => x)*/
 
-
-
-
-		
-		/*val condProb2 = condProb1.map{case(word,(index,stuff)) =>
-			
-				val t = stuff.get
-				((t._1,index),t._2)
-				
-			
-		}.reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
-			(index,(val1.toFloat+val2.toFloat,label))
-			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)*/
-
-		
-
-		//v1.foreach(println(_))
-
-		//(335,(-949.28455,MCAT))
-
-		val r = v1.join(labels)//.map{case()}
+		val r = combined.join(labels)//.map{case()}
 
 		val x = r.map{case(index,((score,label),values)) => 
 			
