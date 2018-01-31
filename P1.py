@@ -152,7 +152,7 @@ requiredLabels = spltLabels.map(lambda label: removeUnnecessary(label))
 # In[26]:
 
 
-numberOfDocs = sc.broadcast(len(requiredLabels.reduce(add)))
+numberOfDocs = sc.broadcast(requiredLabels.flatMap(lambda x: x).count())
 
 
 # In[27]:
@@ -202,7 +202,7 @@ ProbDocList= ProbDoc.map(lambda x : dictToList(x))
 # In[33]:
 
 
-ProbDocList = sc.parallelize(ProbDocList.reduce(add)).reduceByKey(add)
+ProbDocList = ProbDocList.flatMap(lambda x: x).reduceByKey(add)
 
 
 # In[34]:
@@ -285,7 +285,7 @@ logProbability = wordProbability.map(lambda x: getLogProb(x))
 # In[43]:
 
 
-classList = sc.parallelize(requiredLabels.reduce(add))
+classList = requiredLabels.flatMap(lambda x: x)
 classCount = classList.map(lambda x: (x,1)).reduceByKey(add)
 
 
@@ -385,7 +385,7 @@ def dictToTupple(x):
 # In[55]:
 
 
-predictComparison = sc.parallelize(prediction.map(lambda x: dictToTupple(x)).reduce(add)).reduceByKey(add)
+predictComparison = prediction.map(lambda x: dictToTupple(x)).flatMap(lambda x: x).reduceByKey(add)
 
 
 # In[56]:
@@ -406,7 +406,6 @@ predicted = predictComparison.map(lambda x: getPrediction(x[1])).collect()
 
 
 # In[58]:
-
 
 result = open('y_test_large.txt', 'w')
 for labels in predicted:
