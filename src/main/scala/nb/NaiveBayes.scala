@@ -9,6 +9,7 @@ package nb
 import org.apache.spark.rdd.RDD
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.SparkContext
+import java.io._
 
 
 
@@ -45,7 +46,7 @@ object NaiveBayes {
 		val vv = wordsOfDoc.map{case(doc,word) => 
 			val clean = word.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", "")
 			(doc,clean)
-		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word)}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
+		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word) && !word.exists(_.isDigit)}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
 		//vv.foreach(println(_))
 
 
@@ -124,7 +125,7 @@ object NaiveBayes {
 				(a.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", ""),index)
 
 				
-			}.filter{case(word,index) => word.length >1 && !stopwords.contains(word)}
+			}.filter{case(word,index) => word.length >1 && !stopwords.contains(word) && !word.exists(_.isDigit)}
 		}
 
 		//testdata.foreach(println(_))
@@ -174,9 +175,33 @@ object NaiveBayes {
 			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
 
 
-		val r = combined.join(labels)//.map{case()}
+		val k = combined.sortBy(_._1,ascending = true)//map{ case(docid,(socre,prediction)) => prediction}.saveAsTextFile("/home/ankita/vyom/small/result.txt")
 
-		val x = r.map{case(index,((score,label),values)) => 
+
+		val result = k.collect()
+
+
+		val writer = new PrintWriter(new File("results.txt"))
+    	for((k,v) <- result){
+
+      		writer.write(v._2.toString+"\n")
+
+    	}
+		writer.close()
+
+
+
+
+
+
+
+
+		//val r = combined.join(labels)//.map{case()}
+
+
+
+
+		/*val x = r.map{case(index,((score,label),values)) => 
 			
 			if(values.contains(label)){
 				1
@@ -190,7 +215,7 @@ object NaiveBayes {
 		}.reduce(_+_)
 
 		println(x/818.0)
-
+*/
 
 
 
