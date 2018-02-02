@@ -1,4 +1,4 @@
- /**Implementation of Project 0
+ /**Implementation of Project 1
  *
  * Work done by Ankita Joshi
  *
@@ -11,18 +11,15 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.SparkContext
 import java.io._
 
-
-
 object NaiveBayes {
 
 	def train(data: RDD[(String, String)], totalDocuments: Long, B: Broadcast[Array[String]]): (RDD[(String,String,Double,Double)],Long) ={
 		
 		
 		val sc = data.sparkContext
+		//Collect the braodcasted stopwords
 		val stopwords = B.value.toArray
-
-		//data.foreach(println(_))
-
+		
 		//Step 1: Find P(Cj) = Number of documents of label j/ Total nnumber of documents
 		val PCj = data.map{case(label,doc) => (label,1)}.reduceByKey(_+_).map{case(label,count) => (label,math.log((count.toFloat/totalDocuments.toFloat)))}
 		//PCj.foreach(println(_))
@@ -50,13 +47,10 @@ object NaiveBayes {
 		//vv.foreach(println(_))
 		//&& !word.exists(_.isDigit)
 
-
 		//Compute the Vocabulary: Unique number of words in all documents combined. (Needed for laplace smoothing)
-		//val vocabulary = numerator.map{case((label,word),count) => (label,1)}.reduceByKey(_+_).map{case(key,value) => ("vocab",value)}.reduceByKey(_+_)
+		//Broadcast the vocabulary
 		val vocabulary =  vv.map{case((label,word),count) => word}.distinct()
 		val vocabCount = vocabulary.count
-
-		//println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"+vocabCount)
 		val v = sc.broadcast(vocabulary.collect())
 
 		//Compute total number of words for each label(Denominator of step 2)
@@ -64,8 +58,7 @@ object NaiveBayes {
 
 		val step1 = vv.map{case((label,word),count) => (label,(word,count))}.groupByKey()
 
-		//step1.foreach(println(_))
-
+		//Add words not present in a given label, but present in others.
 		val addwords = step1.map{case(label,list) => 
 			var l= list.toMap
 			
@@ -83,43 +76,24 @@ object NaiveBayes {
 			
 		}.flatMap(x => x)
 
-
 		//Now we need to find the probability, Output: Numerator/Denominator. Join both on the label.
 		val joined = addwords.join(denominators)
 
-		//joined.foreach(println(_))
-		//val Pwi_cj = joined.map{case(label,((word,count),(total,vocab))) => (label,(word,math.log((count.toFloat+1)/(total.toFloat+vocab.toFloat))))}
 		val Pwi_cj = joined.map{case(label,((word,count),denom)) => (label,(word,math.log((count.toFloat+1.0)/denom)))}
 
-		//val t = Pwi_cj.map{case(label,(word,pwicj)) => (label,pwicj)}.reduceByKey{case(accCount,count) => accCount + count }
-		//joined.foreach(println(_))
-		//Pwi_cj.foreach(println(_))
-
+		//Return the trained model, combining the priors and the conditional probabilities.
 		val model = PCj.join(Pwi_cj).map{case(label, ((prob1, (word, prob2)))) => (word,label,prob1,prob2)}
-		//model.foreach(println(_))
 		(model,vocabCount.toInt)
-		//(PCj,Pwi_cj,vocabulary)
-		
-
-
-
 	}
 	
 
 
 	def test(data: RDD[(Long, String)], labels: RDD[(Long,String)], model: RDD[(String,String,Double,Double)], v: Broadcast[Int],B: Broadcast[Array[String]]): Unit ={	
 		
-
-
+		//Collect the braodcasted stopwords
 		val stopwords = B.value.toArray
 
-
-		/*val vv = wordsOfDoc.map{case(doc,word) => 
-			val clean = word.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", "")
-			(doc,clean)
-		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word)}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}*/
-
-
+		//Create the test data, preprocessing
 		val testdata =  data.flatMap{ case(index,doc) => 
 			val words = doc.split("\\s") 
 			words.map{case(a) => 
@@ -129,20 +103,15 @@ object NaiveBayes {
 			}.filter{case(word,index) => word.length >1 && !stopwords.contains(word)}
 		}
 		//&& !word.exists(_.isDigit
-		//testdata.foreach(println(_))
+		//testdata.foreach(println(_))		
 
-		
-
+		//Get the priors from training model
 		val priors = model.map{case(word,label,pj,pwicj) => (label,pj)}.distinct()
-
+		//get the conditional probabilities from the training model
 		val pjs = model.map{case(word,label,pj,pwicj) => (word,(label,pwicj))}
-
-		//val testing = pjs.map{case(word,(label,pwicj)) => (label,pwicj)}.reduceByKey{case(accCount,count) => accCount + count }
-		//pjs.foreach(println)
-	
+		
+		//Find the conditional probs for the test data words
 		val condProb = testdata.leftOuterJoin(pjs)
-
-
 		val condProb1 = condProb.filter{case(word,(index,stuff)) => stuff!= None}
 		val v1 = condProb1.map{case(word,(index,stuff)) =>
 			
@@ -170,7 +139,7 @@ object NaiveBayes {
 				
 		}.flatMap{x => x}
 
-
+		//Combine and fin the highest for each label.
 		val combined = v1.union(v2).reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
 			(index,(val1.toFloat+val2.toFloat,label))
 			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
@@ -181,7 +150,7 @@ object NaiveBayes {
 
 		val result = k.collect()
 
-
+		//Wrtiting results to the output file
 		val writer = new PrintWriter(new File("results.txt"))
     	for((k,v) <- result){
 
@@ -190,42 +159,7 @@ object NaiveBayes {
     	}
 		writer.close()
 
-
-
-
-
-
-
-
-		//val r = combined.join(labels)//.map{case()}
-
-
-
-
-		/*val x = r.map{case(index,((score,label),values)) => 
-			
-			if(values.contains(label)){
-				1
-			}
-			else
-				0
-
-
-			
-
-		}.reduce(_+_)
-
-		println(x/818.0)
-*/
-
-
-
-
-
 	}
-
-
-	
 	
 }
 

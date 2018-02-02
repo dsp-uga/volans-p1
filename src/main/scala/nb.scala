@@ -33,41 +33,25 @@ object nbayes {
         val ty = sc.textFile(testy).zipWithIndex.map{case(k,v) => (v,k)}
         val stopwords = sc.broadcast(sc.textFile(stopwordsPath).collect())
 
-        //Make the 
+        //Combine the docs with their labels
         val documentsWithLabels = X.join(y)
         //documentsWithLabels.foreach(println(_))
-
         val data = documentsWithLabels.map{case(stuff) => 
             val doc = stuff._2._1
             val l = stuff._2._2.split(",")
             l.map{case(a) =>  (a,doc)}         
             }.flatMap(x => x).filter{ case(a,doc) => a contains "CAT"} 
-
-        //data.foreach(println(_)) 
       
-        val totalDocuments = data.count()
+        val totalDocuments = data.count()   
 
-        //println(totalDocuments)
-
-        
         //Train
-        val (model,vocabulary) =         NaiveBayes.train(data,totalDocuments,stopwords)
-
-        //model.foreach(println(_))
-        
+        val (model,vocabulary) = NaiveBayes.train(data,totalDocuments,stopwords)
 
         //Test
-
+        //Broadcast the vocabulary
         val vo = sc.broadcast(vocabulary.toInt)
+        val result = NaiveBayes.test(tX,ty,model,vo,stopwords)  
 
-        //v.foreach(println(_))
-
-       val result = NaiveBayes.test(tX,ty,model,vo,stopwords)
-            
-
-   
-        
     }
-
  
 }
