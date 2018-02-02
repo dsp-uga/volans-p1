@@ -26,9 +26,12 @@ The datasets we used to train the classifier is provided by Dr. Shannon Quinn fo
 The project uses Apache Spark to run. Instructions to download and install Apache Spark can be found [here](https://spark.apache.org/downloads.html).
 
 Navigate to the project folder run the following command to execute and run the classifier program:
-`sbt package`
-    
-`spark-submit Naive-Bayes.scala /path/to/X_train_file.txt /path/to/y_train_file.txt /path/to/stopwords_file.txt`
+
+-----------------
+    sbt package
+   
+-------------------    
+    spark-submit Naive-Bayes.scala /path/to/X_train_file.txt /path/to/y_train_file.txt /path/to/stopwords_file.txt
 
 ## Pre-processing: 
 * Each document is converted into word vector
