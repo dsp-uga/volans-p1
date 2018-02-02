@@ -23,7 +23,16 @@ The datasets we used to train the classifier is provided by Dr. Shannon Quinn fo
 3. Large dataset with 723988 documents to train  and 80435 documents to test prediction accuracy.
 
 ## Execution Steps:
-The project uses Apache Spark to run. Instructions to download and install Apache Spark can be found [here](https://spark.apache.org/downloads.html).
+The project requires following to run:
+1. Java. Instructions to download and install Java can be found [here](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html).
+2. Pyton. Instructions to download and install Python can be found [here](https://www.python.org/downloads/)
+3. Scala. Instructions to download and install Python can be found [here](https://www.scala-lang.org/download/)
+4. Apache Spark. Instructions to download and install Apache Spark can be found [here](https://spark.apache.org/downloads.html).
+
+The command to run project requires the following arguments:
+1. Path to the X_train file.
+2. Path to the y_train file.
+3. Path to the stopwords file.
 
 Navigate to the project folder run the following command to execute and run the classifier program:
 
