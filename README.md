@@ -40,7 +40,7 @@ Navigate to the project folder run the following command to execute and run the 
     sbt package
    
 -------------------    
-    spark-submit Naive-Bayes.scala /path/to/X_train_file.txt /path/to/y_train_file.txt /path/to/stopwords_file.txt
+    spark-submit --class "nbayes" /path/to/X_train_file.txt /path/to/y_train_file.txt /path/to/stopwords_file.txt
 
 ## Pre-processing: 
 * Each document is converted into word vector
