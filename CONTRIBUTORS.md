@@ -6,7 +6,8 @@
 #### Prajay Shetty
 * Created Naive-bayes classifier in pySpark using Dataframes.
 * Added Jenkins support to the code
-* Created split data frame for multiple execution depending on split query
+* Added histogram graphics for tf-idf visualization
+
 
 
 #### Vyom Shrivastava
