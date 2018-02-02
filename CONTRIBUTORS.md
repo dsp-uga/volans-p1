@@ -4,9 +4,9 @@
 * Tested and improved code to increase accuracy for large dataset
 
 #### Prajay Shetty
-* Created Naive-bayes classifier in pySpark using Dataframes.
-* Added Jenkins support to the code
-* Added histogram graphics for tf-idf visualization
+* Created Naive-bayes classifier in pySpark using Dataframes. -- did not test on large dataset
+* Added Jenkins support to the code -- didn't use
+* Added histogram graphics for tf-idf visualization -- didn't use
 
 
 
