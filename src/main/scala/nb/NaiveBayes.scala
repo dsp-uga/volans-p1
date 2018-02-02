@@ -46,8 +46,9 @@ object NaiveBayes {
 		val vv = wordsOfDoc.map{case(doc,word) => 
 			val clean = word.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", "")
 			(doc,clean)
-		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word) && !word.exists(_.isDigit)}.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
+		}.filter{case(doc,word) => word.length >1 && !stopwords.contains(word) }.map{case(doc,word) => ((doc,word),1)}.reduceByKey{case(accCount,count) => accCount + count}
 		//vv.foreach(println(_))
+		//&& !word.exists(_.isDigit)
 
 
 		//Compute the Vocabulary: Unique number of words in all documents combined. (Needed for laplace smoothing)
@@ -125,9 +126,9 @@ object NaiveBayes {
 				(a.toLowerCase.replaceAll("&amp;", "").replaceAll("&quot;","").replaceAll("""([\p{Punct}]|\b\p{IsLetter}{1,2}\b)\s*""", ""),index)
 
 				
-			}.filter{case(word,index) => word.length >1 && !stopwords.contains(word) && !word.exists(_.isDigit)}
+			}.filter{case(word,index) => word.length >1 && !stopwords.contains(word)}
 		}
-
+		//&& !word.exists(_.isDigit
 		//testdata.foreach(println(_))
 
 		
@@ -151,9 +152,9 @@ object NaiveBayes {
 			
 		}/*.reduceByKey{case(accCount,count) => accCount + count }.map{case((label,index),score) => (label,(index,score))}.join(priors).map{case((label,((index,val1),val2)))=>
 			(index,(val1.toFloat+val2.toFloat,label))
-			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)
+			}.groupByKey().map{case(doc,list) => (doc,list.toArray.sortWith(_._1 > _._1)(0))}.sortByKey(ascending=true)*/
 
-		*/
+		
 
 		val condProb2 = condProb.filter{case(word,(index,stuff)) => stuff == None}
 		val v2 = condProb2.map{case(word,(index,stuff)) =>
@@ -176,7 +177,7 @@ object NaiveBayes {
 
 
 		val k = combined.sortBy(_._1,ascending = true)//map{ case(docid,(socre,prediction)) => prediction}.saveAsTextFile("/home/ankita/vyom/small/result.txt")
-
+		//val k = v1.sortBy(_._1,ascending = true)
 
 		val result = k.collect()
 

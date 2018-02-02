@@ -51,7 +51,7 @@ object nbayes {
 
         
         //Train
-        val (model,vocabulary) =  NaiveBayes.train(data,totalDocuments,stopwords)
+        val (model,vocabulary) =         NaiveBayes.train(data,totalDocuments,stopwords)
 
         //model.foreach(println(_))
         
